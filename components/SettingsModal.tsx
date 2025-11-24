@@ -52,19 +52,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute top-full right-0 mt-2 z-50 w-80 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[80vh] origin-top-right animate-in fade-in zoom-in-95 duration-100">
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-zinc-100" />
-            <h2 className="text-lg font-medium text-white">Settings</h2>
+            <Settings className="w-4 h-4 text-zinc-400" />
+            <h2 className="text-sm font-medium text-white">Settings</h2>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-zinc-800 rounded-full transition-colors">
-            <X className="w-5 h-5 text-zinc-400" />
-          </button>
         </div>
 
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-4 space-y-5 overflow-y-auto custom-scrollbar">
           <div className="space-y-4">
             
             <div className="space-y-2">
@@ -202,6 +200,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
