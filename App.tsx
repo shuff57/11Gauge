@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, Settings, RefreshCw, Zap, Flame, Image as ImageIcon, LogIn, User } from 'lucide-react';
+import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
 import { AppSettings } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
-import { analyzeImage } from './services/llm';
+import { analyzeImage, getOllamaKey, saveOllamaKey } from './services/llm';
 
 export default function App() {
   // State
@@ -97,6 +97,59 @@ export default function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+
+  useEffect(() => {
+    if (user) return;
+    let active = true;
+    const fetchSessionUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null);
+        if (!active) return;
+        if (data?.user?.email) {
+          setUser({ email: data.user.email });
+        }
+      } catch (err) {
+        console.warn('Session fetch failed', err);
+      }
+    };
+    fetchSessionUser();
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  // When user changes, if we have user and provider is Ollama, fetch stored key
+  useEffect(() => {
+    let mounted = true;
+    const loadKey = async () => {
+      if (!user) return;
+      try {
+        const key = await getOllamaKey();
+        if (!mounted) return;
+        if (key) {
+          setSettings((s) => ({ ...s, ollamaKey: key }));
+        } else {
+          // If there's a session key from before login, save it to DB and persist for user
+          const sessionKey = sessionStorage.getItem('session_ollama_key');
+          if (sessionKey) {
+            try {
+              await saveOllamaKey(sessionKey);
+              setSettings((s) => ({ ...s, ollamaKey: sessionKey }));
+              sessionStorage.removeItem('session_ollama_key');
+            } catch (err) {
+              console.warn('Failed to persist session key for user', err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch key on login', err);
+      }
+    };
+    loadKey();
+    return () => { mounted = false; };
+  }, [user]);
 
   // Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,7 +282,9 @@ export default function App() {
             onClose={() => setIsSettingsOpen(false)}
             settings={settings}
             onUpdate={setSettings}
+            user={user}
           />
+
         </div>
       </header>
 

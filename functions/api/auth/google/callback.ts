@@ -1,3 +1,4 @@
+import { createSession, buildSessionCookie } from '../../../utils/session';
 interface Env {
   USERS_DB: D1Database;
   GOOGLE_CLIENT_ID: string;
@@ -26,6 +27,7 @@ interface GoogleUserInfo {
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
+  const secure = request.url.startsWith('https://');
   
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
@@ -100,28 +102,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // Check if user exists
     const existingUser = await env.USERS_DB.prepare(
       'SELECT id, email FROM users WHERE email = ?'
-    ).bind(userInfo.email).first();
-    
+    ).bind(userInfo.email.toLowerCase()).first();
+    let userId = existingUser?.id;
+
     if (!existingUser) {
       // Create new user (OAuth users don't have passwords)
       console.log('[Google OAuth Callback] Creating new user');
-      await env.USERS_DB.prepare(
+      const insert = await env.USERS_DB.prepare(
         'INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)'
       ).bind(
-        userInfo.email,
+        userInfo.email.toLowerCase(),
         'GOOGLE_OAUTH', // Placeholder for OAuth users
         new Date().toISOString()
       ).run();
+      if (insert.success) {
+        userId = insert.meta.last_row_id;
+      }
     }
     
     console.log('[Google OAuth Callback] User authenticated, redirecting');
     
-    // Redirect back to app with user email (in production, use a session token)
+    const token = userId ? await createSession(env, userId) : null;
+
     const base = returnToOrigin || new URL(request.url).origin;
     const redirectUrl = new URL(base);
     redirectUrl.pathname = '/';
     redirectUrl.search = `?auth_success=true&email=${encodeURIComponent(userInfo.email)}`;
-    return Response.redirect(redirectUrl.toString(), 302);
+
+    const headers = new Headers({ Location: redirectUrl.toString() });
+    if (token) {
+      headers.set('Set-Cookie', buildSessionCookie(token, { secure }));
+    }
+    return new Response(null, { status: 302, headers });
   } catch (err: any) {
     console.error('[Google OAuth Callback] Error:', err);
     const base = returnToOrigin || new URL(request.url).origin;

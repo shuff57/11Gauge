@@ -56,6 +56,18 @@ export const saveOllamaKey = async (key?: string): Promise<boolean> => {
   }
 };
 
+export const getOllamaKey = async (): Promise<string | null> => {
+  try {
+    const response = await fetch('/api/keys/ollama');
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.key || null;
+  } catch (err) {
+    console.warn('Failed to fetch Ollama key', err);
+    return null;
+  }
+};
+
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

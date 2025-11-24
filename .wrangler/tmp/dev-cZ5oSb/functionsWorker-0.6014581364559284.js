@@ -1,12 +1,72 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/pages-cM5vQY/functionsWorker-0.11284264779123321.mjs
+// .wrangler/tmp/pages-uYvF6v/functionsWorker-0.6014581364559284.mjs
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var SESSION_COOKIE_NAME = "11g_session";
+var SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+var parseCookies = /* @__PURE__ */ __name2((header) => {
+  if (!header) return {};
+  return header.split(";").reduce((acc, part) => {
+    const [key, ...rest] = part.trim().split("=");
+    if (!key) return acc;
+    acc[key] = decodeURIComponent(rest.join("="));
+    return acc;
+  }, {});
+}, "parseCookies");
+var buildSessionCookie = /* @__PURE__ */ __name2((token, options) => {
+  const parts = [`${SESSION_COOKIE_NAME}=${token ? encodeURIComponent(token) : ""}`];
+  parts.push("Path=/");
+  if (token) {
+    parts.push(`Max-Age=${SESSION_MAX_AGE_SECONDS}`);
+  } else {
+    parts.push("Max-Age=0");
+  }
+  parts.push("SameSite=Lax");
+  if (options?.secure !== false) {
+    parts.push("Secure");
+  }
+  parts.push("HttpOnly");
+  return parts.join("; ");
+}, "buildSessionCookie");
+var createSession = /* @__PURE__ */ __name2(async (env, userId) => {
+  if (!env.USERS_DB) return null;
+  const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  const createdAt = /* @__PURE__ */ new Date();
+  const expiresAt = new Date(createdAt.getTime() + SESSION_MAX_AGE_SECONDS * 1e3);
+  await env.USERS_DB.prepare(
+    "INSERT INTO sessions (user_id, token, created_at, expires_at) VALUES (?, ?, ?, ?)"
+  ).bind(userId, token, createdAt.toISOString(), expiresAt.toISOString()).run();
+  return token;
+}, "createSession");
+var deleteSession = /* @__PURE__ */ __name2(async (env, token) => {
+  if (!env.USERS_DB) return;
+  await env.USERS_DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
+}, "deleteSession");
+var getSessionToken = /* @__PURE__ */ __name2((request) => {
+  const cookieHeader = request.headers.get("Cookie");
+  const cookies = parseCookies(cookieHeader);
+  return cookies[SESSION_COOKIE_NAME] || null;
+}, "getSessionToken");
+var getSessionUser = /* @__PURE__ */ __name2(async (env, request) => {
+  if (!env.USERS_DB) return null;
+  const token = getSessionToken(request);
+  if (!token) return null;
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  const session = await env.USERS_DB.prepare(
+    `SELECT s.id, s.user_id, s.token, s.expires_at, u.email
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.token = ? AND s.expires_at > ?`
+  ).bind(token, nowIso).first();
+  if (!session || !session.email) return null;
+  return { id: session.user_id, email: session.email };
+}, "getSessionUser");
 var onRequest = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
+  const secure = request.url.startsWith("https://");
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   let returnToOrigin = null;
@@ -67,24 +127,33 @@ var onRequest = /* @__PURE__ */ __name2(async (context) => {
     console.log("[Google OAuth Callback] Got user info:", userInfo.email);
     const existingUser = await env.USERS_DB.prepare(
       "SELECT id, email FROM users WHERE email = ?"
-    ).bind(userInfo.email).first();
+    ).bind(userInfo.email.toLowerCase()).first();
+    let userId = existingUser?.id;
     if (!existingUser) {
       console.log("[Google OAuth Callback] Creating new user");
-      await env.USERS_DB.prepare(
+      const insert = await env.USERS_DB.prepare(
         "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)"
       ).bind(
-        userInfo.email,
+        userInfo.email.toLowerCase(),
         "GOOGLE_OAUTH",
         // Placeholder for OAuth users
         (/* @__PURE__ */ new Date()).toISOString()
       ).run();
+      if (insert.success) {
+        userId = insert.meta.last_row_id;
+      }
     }
     console.log("[Google OAuth Callback] User authenticated, redirecting");
+    const token = userId ? await createSession(env, userId) : null;
     const base = returnToOrigin || new URL(request.url).origin;
     const redirectUrl = new URL(base);
     redirectUrl.pathname = "/";
     redirectUrl.search = `?auth_success=true&email=${encodeURIComponent(userInfo.email)}`;
-    return Response.redirect(redirectUrl.toString(), 302);
+    const headers = new Headers({ Location: redirectUrl.toString() });
+    if (token) {
+      headers.set("Set-Cookie", buildSessionCookie(token, { secure }));
+    }
+    return new Response(null, { status: 302, headers });
   } catch (err) {
     console.error("[Google OAuth Callback] Error:", err);
     const base = returnToOrigin || new URL(request.url).origin;
@@ -124,36 +193,51 @@ var json = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.string
     ...init.headers || {}
   }
 }), "json");
+var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  const user = await getSessionUser(env, request);
+  if (!user) {
+    return json({ user: null }, { status: 401 });
+  }
+  return json({ user });
+}, "onRequest");
+var json2 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
 var hashPassword = /* @__PURE__ */ __name2(async (password) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
+  const encoder2 = new TextEncoder();
+  const data = encoder2.encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }, "hashPassword");
-var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest4 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   console.log("[Auth] Request received");
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
   console.log("[Auth] USERS_DB:", !!env.USERS_DB);
   if (!env.USERS_DB) {
-    return json({ error: "Database not configured" }, { status: 501 });
+    return json2({ error: "Database not configured" }, { status: 501 });
   }
   let payload;
   try {
     payload = await request.json();
   } catch (e) {
     console.error("[Auth] JSON parse error:", e);
-    return json({ error: "Invalid JSON" }, { status: 400 });
+    return json2({ error: "Invalid JSON" }, { status: 400 });
   }
   const { email, password } = payload;
   console.log("[Auth] Email:", email);
   if (!email || !password) {
-    return json({ error: "Email and password are required" }, { status: 400 });
+    return json2({ error: "Email and password are required" }, { status: 400 });
   }
   const emailLower = email.toLowerCase().trim();
   const passwordHash = await hashPassword(password);
+  const secure = request.url.startsWith("https://");
   try {
     console.log("[Auth] Checking for existing user:", emailLower);
     const existingUser = await env.USERS_DB.prepare(
@@ -165,13 +249,15 @@ var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env }) => {
         "SELECT id FROM users WHERE email = ? AND password_hash = ?"
       ).bind(emailLower, passwordHash).first();
       if (!userWithPassword) {
-        return json({ error: "Invalid credentials" }, { status: 401 });
+        return json2({ error: "Invalid credentials" }, { status: 401 });
       }
-      return json({
+      const token2 = await createSession(env, existingUser.id);
+      const headers2 = token2 ? { "Set-Cookie": buildSessionCookie(token2, { secure }) } : {};
+      return json2({
         success: true,
         user: { id: existingUser.id, email: existingUser.email },
         isNewUser: false
-      });
+      }, { headers: headers2 });
     }
     const result = await env.USERS_DB.prepare(
       "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)"
@@ -179,18 +265,152 @@ var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env }) => {
     if (!result.success) {
       throw new Error("Failed to create user");
     }
-    return json({
+    const token = await createSession(env, result.meta.last_row_id);
+    const headers = token ? { "Set-Cookie": buildSessionCookie(token, { secure }) } : {};
+    return json2({
       success: true,
       user: { id: result.meta.last_row_id, email: emailLower },
       isNewUser: true
-    });
+    }, { headers });
   } catch (err) {
     console.error("Auth error:", err);
-    return json({ error: "Authentication failed" }, { status: 500 });
+    return json2({ error: "Authentication failed" }, { status: 500 });
   }
 }, "onRequest");
-var onRequest4 = /* @__PURE__ */ __name2(async ({ request }) => {
-  return new Response(null, { status: 204 });
+var onRequest5 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  const token = getSessionToken(request);
+  if (token) {
+    await deleteSession(env, token);
+  }
+  const secure = request.url.startsWith("https://");
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Set-Cookie": buildSessionCookie(null, { secure })
+    }
+  });
+}, "onRequest");
+var encoder = new TextEncoder();
+var decoder = new TextDecoder();
+var base64Encode = /* @__PURE__ */ __name2((buffer) => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let binary = "";
+  bytes.forEach((b) => binary += String.fromCharCode(b));
+  return btoa(binary);
+}, "base64Encode");
+var base64Decode = /* @__PURE__ */ __name2((input) => {
+  const binary = atob(input);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}, "base64Decode");
+var deriveKey = /* @__PURE__ */ __name2(async (secret) => {
+  const hashed = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
+  return crypto.subtle.importKey("raw", hashed, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}, "deriveKey");
+var encryptText = /* @__PURE__ */ __name2(async (plainText, secret) => {
+  if (!secret) throw new Error("Missing encryption secret");
+  const key = await deriveKey(secret);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(plainText));
+  const payload = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+  payload.set(iv, 0);
+  payload.set(new Uint8Array(ciphertext), iv.byteLength);
+  return base64Encode(payload);
+}, "encryptText");
+var decryptText = /* @__PURE__ */ __name2(async (payload, secret) => {
+  if (!secret || !payload) return null;
+  const key = await deriveKey(secret);
+  const bytes = base64Decode(payload);
+  if (bytes.byteLength <= 12) return null;
+  const iv = bytes.slice(0, 12);
+  const cipherBytes = bytes.slice(12);
+  try {
+    const plainBuffer = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipherBytes);
+    return decoder.decode(plainBuffer);
+  } catch (err) {
+    console.error("Decrypt error:", err);
+    return null;
+  }
+}, "decryptText");
+var PROVIDER = "ollama";
+var DEFAULT_LABEL = "Default";
+var json3 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
+var onRequest6 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  const sessionUser = await getSessionUser(env, request);
+  const secret = env.OLLAMA_KEY_SECRET;
+  if (request.method === "POST") {
+    if (!sessionUser || !env.USERS_DB) {
+      return json3({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (!secret) {
+      return json3({ error: "Encryption secret not configured" }, { status: 500 });
+    }
+    const payload = await request.json().catch(() => ({}));
+    const key = (payload?.key || "").trim();
+    if (!key) {
+      return json3({ error: "API key is required." }, { status: 400 });
+    }
+    try {
+      const encrypted = await encryptText(key, secret);
+      const existing = await env.USERS_DB.prepare("SELECT id FROM user_keys WHERE user_id = ? AND provider = ? AND label = ?").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL).first();
+      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+      if (existing) {
+        await env.USERS_DB.prepare("UPDATE user_keys SET key_value = ?, updated_at = ? WHERE id = ?").bind(encrypted, timestamp, existing.id).run();
+      } else {
+        await env.USERS_DB.prepare("INSERT INTO user_keys (user_id, provider, label, key_value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL, encrypted, timestamp, timestamp).run();
+      }
+      return json3({ success: true });
+    } catch (err) {
+      console.error("Key store error:", err);
+      return json3({ error: "Failed to store key" }, { status: 500 });
+    }
+  }
+  if (request.method === "DELETE") {
+    if (!sessionUser || !env.USERS_DB) {
+      return json3({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (!secret) {
+      return json3({ error: "Encryption secret not configured" }, { status: 500 });
+    }
+    try {
+      await env.USERS_DB.prepare("DELETE FROM user_keys WHERE user_id = ? AND provider = ? AND label = ?").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL).run();
+      return json3({ success: true });
+    } catch (err) {
+      console.error("Key delete error:", err);
+      return json3({ error: "Failed to delete key" }, { status: 500 });
+    }
+  }
+  if (request.method === "GET") {
+    if (!secret) {
+      return json3({ error: "Encryption secret not configured" }, { status: 500 });
+    }
+    if (sessionUser && env.USERS_DB) {
+      try {
+        const keyRow = await env.USERS_DB.prepare("SELECT key_value FROM user_keys WHERE user_id = ? AND provider = ? AND label = ?").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL).first();
+        if (!keyRow?.key_value) return json3({ key: null });
+        const decrypted = await decryptText(keyRow.key_value, secret);
+        return json3({ key: decrypted || null });
+      } catch (err) {
+        console.error("Key fetch error:", err);
+        return json3({ key: null, error: "Failed to fetch key" }, { status: 500 });
+      }
+    }
+    return json3({ key: null });
+  }
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: { Allow: "POST, DELETE" }
+  });
 }, "onRequest");
 var CLOUD_VISION_MODEL = "qwen3-vl:235b-instruct-cloud";
 var OLLAMA_KEY_STORAGE_KEY = "ollama_api_key";
@@ -254,40 +474,7 @@ var relayResponse = /* @__PURE__ */ __name2(async (response) => {
     }
   });
 }, "relayResponse");
-var json2 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
-  ...init,
-  headers: {
-    "Content-Type": "application/json",
-    ...init.headers || {}
-  }
-}), "json");
-var onRequest5 = /* @__PURE__ */ __name2(async ({ request, env }) => {
-  if (!env.KEY_STORE) {
-    return json2({ error: "Key storage is not configured." }, { status: 501 });
-  }
-  if (request.method === "POST") {
-    const payload = await request.json().catch(() => ({}));
-    const key = (payload?.key || "").trim();
-    if (!key) {
-      return json2({ error: "API key is required." }, { status: 400 });
-    }
-    await env.KEY_STORE.put(OLLAMA_KEY_STORAGE_KEY, key);
-    return json2({ success: true });
-  }
-  if (request.method === "DELETE") {
-    if (typeof env.KEY_STORE.delete === "function") {
-      await env.KEY_STORE.delete(OLLAMA_KEY_STORAGE_KEY);
-    } else {
-      await env.KEY_STORE.put(OLLAMA_KEY_STORAGE_KEY, "");
-    }
-    return json2({ success: true });
-  }
-  return new Response("Method Not Allowed", {
-    status: 405,
-    headers: { Allow: "POST, DELETE" }
-  });
-}, "onRequest");
-var onRequest6 = /* @__PURE__ */ __name2(async (context) => {
+var onRequest7 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -331,7 +518,7 @@ var onRequest6 = /* @__PURE__ */ __name2(async (context) => {
     });
   }
 }, "onRequest");
-var onRequest7 = /* @__PURE__ */ __name2(async (context) => {
+var onRequest8 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -368,6 +555,208 @@ var onRequest7 = /* @__PURE__ */ __name2(async (context) => {
     });
   }
 }, "onRequest");
+var json4 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
+var fetchKey = /* @__PURE__ */ __name2(async (env, userId, id) => {
+  if (!env.USERS_DB) return null;
+  const row = await env.USERS_DB.prepare(
+    "SELECT id, user_id, provider, label, key_value, created_at, updated_at FROM user_keys WHERE id = ? AND user_id = ?"
+  ).bind(id, userId).first();
+  return row || null;
+}, "fetchKey");
+var onRequest9 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
+  const keyId = Number(params?.id);
+  if (!keyId) {
+    return json4({ error: "Invalid key id" }, { status: 400 });
+  }
+  const sessionUser = await getSessionUser(env, request);
+  if (!sessionUser || !env.USERS_DB) {
+    return json4({ error: "Not authenticated" }, { status: 401 });
+  }
+  const secret = env.OLLAMA_KEY_SECRET;
+  if (!secret) {
+    return json4({ error: "Encryption secret not configured" }, { status: 500 });
+  }
+  if (request.method === "GET") {
+    const row = await fetchKey(env, sessionUser.id, keyId);
+    if (!row) return json4({ error: "Key not found" }, { status: 404 });
+    const decrypted = await decryptText(row.key_value, secret);
+    return json4({
+      key: {
+        id: row.id,
+        provider: row.provider,
+        label: row.label,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        value: decrypted || ""
+      }
+    });
+  }
+  if (request.method === "PUT") {
+    const existing = await fetchKey(env, sessionUser.id, keyId);
+    if (!existing) return json4({ error: "Key not found" }, { status: 404 });
+    try {
+      const payload = await request.json();
+      const updates = [];
+      const bindings = [];
+      let lastFour = null;
+      if (payload?.label !== void 0) {
+        const label = (payload.label || "").trim();
+        if (!label) throw new Error("Label is required");
+        if (label.length > 60) throw new Error("Label must be 60 characters or fewer");
+        updates.push("label = ?");
+        bindings.push(label);
+      }
+      if (payload?.key !== void 0) {
+        const rawKey = (payload.key || "").trim();
+        if (!rawKey) throw new Error("API key is required");
+        const encrypted = await encryptText(rawKey, secret);
+        updates.push("key_value = ?");
+        bindings.push(encrypted);
+        lastFour = rawKey.slice(-4);
+      }
+      if (!updates.length) {
+        return json4({ error: "No changes provided" }, { status: 400 });
+      }
+      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+      updates.push("updated_at = ?");
+      bindings.push(timestamp);
+      bindings.push(keyId, sessionUser.id);
+      await env.USERS_DB.prepare(
+        `UPDATE user_keys SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`
+      ).bind(...bindings).run();
+      const refreshed = await fetchKey(env, sessionUser.id, keyId);
+      if (!refreshed) {
+        return json4({ error: "Key not found" }, { status: 404 });
+      }
+      const decrypted = await decryptText(refreshed.key_value, secret);
+      return json4({
+        key: {
+          id: refreshed.id,
+          provider: refreshed.provider,
+          label: refreshed.label,
+          createdAt: refreshed.created_at,
+          updatedAt: refreshed.updated_at,
+          lastFour: lastFour ?? (decrypted ? decrypted.slice(-4) : null)
+        }
+      });
+    } catch (err) {
+      if (err?.message?.includes("UNIQUE")) {
+        return json4({ error: "A key with that label already exists for this provider." }, { status: 409 });
+      }
+      return json4({ error: err?.message || "Failed to update key" }, { status: 400 });
+    }
+  }
+  if (request.method === "DELETE") {
+    await env.USERS_DB.prepare("DELETE FROM user_keys WHERE id = ? AND user_id = ?").bind(keyId, sessionUser.id).run();
+    return json4({ success: true });
+  }
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: { Allow: "GET, PUT, DELETE" }
+  });
+}, "onRequest");
+var AVAILABLE_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "gemini", "openai"]);
+var json5 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
+var normalizeProvider = /* @__PURE__ */ __name2((value) => {
+  if (!value) throw new Error("Provider is required");
+  const normalized = value.trim().toLowerCase();
+  if (!AVAILABLE_PROVIDERS.has(normalized)) {
+    throw new Error("Unsupported provider");
+  }
+  return normalized;
+}, "normalizeProvider");
+var sanitizeLabel = /* @__PURE__ */ __name2((value) => {
+  const trimmed = (value || "").trim();
+  if (!trimmed) {
+    throw new Error("Label is required");
+  }
+  if (trimmed.length > 60) {
+    throw new Error("Label must be 60 characters or fewer");
+  }
+  return trimmed;
+}, "sanitizeLabel");
+var summarizeRow = /* @__PURE__ */ __name2(async (row, secret) => {
+  const decrypted = await decryptText(row.key_value, secret);
+  return {
+    id: row.id,
+    provider: row.provider,
+    label: row.label,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastFour: decrypted ? decrypted.slice(-4) : null
+  };
+}, "summarizeRow");
+var onRequest10 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  const sessionUser = await getSessionUser(env, request);
+  if (!sessionUser || !env.USERS_DB) {
+    return json5({ error: "Not authenticated" }, { status: 401 });
+  }
+  const secret = env.OLLAMA_KEY_SECRET;
+  if (!secret) {
+    return json5({ error: "Encryption secret not configured" }, { status: 500 });
+  }
+  if (request.method === "GET") {
+    const rows = await env.USERS_DB.prepare(
+      "SELECT id, provider, label, key_value, created_at, updated_at FROM user_keys WHERE user_id = ? ORDER BY created_at DESC"
+    ).bind(sessionUser.id).all().then((res) => res.results || []);
+    const keys = await Promise.all(rows.map((row) => summarizeRow(row, secret)));
+    return json5({ keys });
+  }
+  if (request.method === "POST") {
+    let provider;
+    let label;
+    let key;
+    try {
+      const payload = await request.json();
+      provider = normalizeProvider(payload?.provider);
+      label = sanitizeLabel(payload?.label);
+      key = (payload?.key || "").trim();
+      if (!key) throw new Error("API key is required");
+    } catch (err) {
+      return json5({ error: err?.message || "Invalid payload" }, { status: 400 });
+    }
+    try {
+      const encrypted = await encryptText(key, secret);
+      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+      const result = await env.USERS_DB.prepare(
+        "INSERT INTO user_keys (user_id, provider, label, key_value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+      ).bind(sessionUser.id, provider, label, encrypted, timestamp, timestamp).run();
+      const id = result.meta?.last_row_id;
+      return json5({
+        key: {
+          id,
+          provider,
+          label,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          lastFour: key.slice(-4)
+        }
+      }, { status: 201 });
+    } catch (err) {
+      if (err?.message?.includes("UNIQUE")) {
+        return json5({ error: "A key with that label already exists for this provider." }, { status: 409 });
+      }
+      console.error("Key insert error", err);
+      return json5({ error: "Failed to create key" }, { status: 500 });
+    }
+  }
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: { Allow: "GET, POST" }
+  });
+}, "onRequest");
 var routes = [
   {
     routePath: "/api/auth/google/callback",
@@ -384,39 +773,60 @@ var routes = [
     modules: [onRequest2]
   },
   {
-    routePath: "/api/auth/signin",
+    routePath: "/api/auth/me",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
     modules: [onRequest3]
   },
   {
-    routePath: "/api/auth/signout",
+    routePath: "/api/auth/signin",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
     modules: [onRequest4]
   },
   {
+    routePath: "/api/auth/signout",
+    mountPath: "/api/auth",
+    method: "",
+    middlewares: [],
+    modules: [onRequest5]
+  },
+  {
     routePath: "/api/keys/ollama",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest5]
+    modules: [onRequest6]
   },
   {
     routePath: "/api/ollama/generate",
     mountPath: "/api/ollama",
     method: "",
     middlewares: [],
-    modules: [onRequest6]
+    modules: [onRequest7]
   },
   {
     routePath: "/api/ollama/test",
     mountPath: "/api/ollama",
     method: "",
     middlewares: [],
-    modules: [onRequest7]
+    modules: [onRequest8]
+  },
+  {
+    routePath: "/api/keys/:id",
+    mountPath: "/api/keys",
+    method: "",
+    middlewares: [],
+    modules: [onRequest9]
+  },
+  {
+    routePath: "/api/keys",
+    mountPath: "/api/keys",
+    method: "",
+    middlewares: [],
+    modules: [onRequest10]
   }
 ];
 function lexer(str) {
@@ -1084,7 +1494,7 @@ var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default2 = jsonError2;
 
-// .wrangler/tmp/bundle-odUCBy/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-GTvL4F/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__2 = [
   middleware_ensure_req_body_drained_default2,
   middleware_miniflare3_json_error_default2
@@ -1116,7 +1526,7 @@ function __facade_invoke__2(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__2, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-odUCBy/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-GTvL4F/middleware-loader.entry.ts
 var __Facade_ScheduledController__2 = class ___Facade_ScheduledController__2 {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -1216,4 +1626,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__2 as __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default2 as default
 };
-//# sourceMappingURL=functionsWorker-0.11284264779123321.js.map
+//# sourceMappingURL=functionsWorker-0.6014581364559284.js.map

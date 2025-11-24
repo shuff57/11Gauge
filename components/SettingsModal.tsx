@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { X, CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal } from 'lucide-react';
 import { AppSettings, ModelProvider } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
-import { testConnection, saveOllamaKey } from '../services/llm';
+import { testConnection, saveOllamaKey, getOllamaKey } from '../services/llm';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: AppSettings;
   onUpdate: (newSettings: AppSettings) => void;
+  user?: { email: string } | null;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -16,11 +17,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   onUpdate,
+  user,
 }) => {
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
-
-  if (!isOpen) return null;
 
   const handleChange = (key: keyof AppSettings, value: any) => {
     onUpdate({ ...settings, [key]: value });
@@ -38,7 +38,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       await testConnection(settings);
       let keyStored = false;
       if (settings.provider === ModelProvider.OLLAMA) {
-        keyStored = await saveOllamaKey(settings.ollamaKey);
+        // Save to sessionStorage if not logged in, otherwise persist to DB
+        if (user && user.email) {
+          keyStored = await saveOllamaKey(settings.ollamaKey);
+        } else {
+          sessionStorage.setItem('session_ollama_key', settings.ollamaKey || '');
+          keyStored = false;
+        }
       }
       setTestStatus('success');
       setTestMessage(keyStored ? 'Connection verified and key saved securely.' : 'Connection verified successfully.');
@@ -48,8 +54,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  // Load key when settings modal opens
+  React.useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!isOpen) return;
+      if (settings.provider !== ModelProvider.OLLAMA) return;
+      if (user && user.email) {
+        const k = await getOllamaKey();
+        if (mounted && k) {
+          onUpdate({ ...settings, ollamaKey: k });
+        }
+      } else {
+        const sessionKey = sessionStorage.getItem('session_ollama_key');
+        if (mounted && sessionKey) {
+          onUpdate({ ...settings, ollamaKey: sessionKey });
+        }
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [isOpen, settings.provider, user]);
+
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
+
+  if (!isOpen) return null;
 
   return (
     <>
@@ -129,6 +159,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
                     placeholder="Bearer token (optional)"
                   />
+                </div>
+                <div className="text-xs text-zinc-500">
+                  {user ? 'Saved to your account' : 'Saved for this browser session only'}
                 </div>
               </>
             )}

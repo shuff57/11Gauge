@@ -1,3 +1,4 @@
+import { createSession, buildSessionCookie } from '../../utils/session';
 interface Env {
   USERS_DB?: D1Database;
 }
@@ -54,6 +55,7 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
 
   const emailLower = email.toLowerCase().trim();
   const passwordHash = await hashPassword(password);
+  const secure = request.url.startsWith('https://');
 
   try {
     console.log('[Auth] Checking for existing user:', emailLower);
@@ -75,11 +77,13 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
         return json({ error: 'Invalid credentials' }, { status: 401 });
       }
 
+      const token = await createSession(env, existingUser.id);
+      const headers: HeadersInit = token ? { 'Set-Cookie': buildSessionCookie(token, { secure }) } : {};
       return json({ 
         success: true, 
         user: { id: existingUser.id, email: existingUser.email },
         isNewUser: false
-      });
+      }, { headers });
     }
 
     // Create new user
@@ -91,11 +95,13 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
       throw new Error('Failed to create user');
     }
 
+    const token = await createSession(env, result.meta.last_row_id);
+    const headers: HeadersInit = token ? { 'Set-Cookie': buildSessionCookie(token, { secure }) } : {};
     return json({ 
       success: true, 
       user: { id: result.meta.last_row_id, email: emailLower },
       isNewUser: true
-    });
+    }, { headers });
   } catch (err: any) {
     console.error('Auth error:', err);
     return json({ error: 'Authentication failed' }, { status: 500 });
