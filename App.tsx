@@ -128,7 +128,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-        <div className="mx-[5vw] min-h-full flex flex-col p-6">
+        <div className="mx-[5vw] min-h-full flex flex-col p-2 sm:p-6">
           
           {/* Empty State / Logo with overlay inputs */}
           {!selectedFile && (
@@ -137,7 +137,7 @@ export default function App() {
                 <img 
                   src="/11gauge-logo.png" 
                   alt="11Gauge Logo" 
-                  className="w-32 h-32 object-contain invert opacity-90 mb-6 rounded-[2rem]" 
+                  className="w-32 h-32 max-w-[60vw] max-h-[60vw] object-contain invert opacity-90 mb-6 rounded-[2rem]" 
                 />
                 <h1 className="text-xl font-medium text-white mb-2">Ready to Analyze</h1>
                 <p className="text-sm text-zinc-400 max-w-xs text-center">
@@ -147,10 +147,10 @@ export default function App() {
               
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex-1 flex flex-col items-center justify-center gap-6 hover:bg-zinc-900/80 transition-all group rounded-3xl p-6 bg-zinc-900/40 border border-zinc-800"
+                className="flex-1 flex flex-col items-center justify-center gap-6 hover:bg-zinc-900/80 transition-all group rounded-3xl p-2 sm:p-6 bg-zinc-900/40 border border-zinc-800"
               >
-                <div className="w-48 h-48 p-6 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center">
-                  <ImageIcon className="w-24 h-24 text-zinc-400 group-hover:text-white transition-colors" />
+                <div className="w-48 h-48 max-w-[70vw] max-h-[70vw] p-6 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center aspect-square">
+                  <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors" />
                 </div>
               </button>
             </div>
