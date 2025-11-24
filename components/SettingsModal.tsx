@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { X, CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, RefreshCcw, Pencil, Trash2 } from 'lucide-react';
 import { AppSettings, ModelProvider } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
 import { testConnection, saveOllamaKey, getOllamaKey } from '../services/llm';
@@ -11,12 +11,19 @@ interface SavedKeySummary {
   provider: ProviderSlug;
   label: string;
   updatedAt: string;
+  lastFour?: string | null;
 }
 
 const PROVIDER_FIELD_MAP: Record<ProviderSlug, keyof AppSettings> = {
   ollama: 'ollamaKey',
   gemini: 'geminiKey',
   openai: 'openaiKey'
+};
+
+const MODEL_TO_PROVIDER: Record<ModelProvider, ProviderSlug> = {
+  [ModelProvider.OLLAMA]: 'ollama',
+  [ModelProvider.GEMINI]: 'gemini',
+  [ModelProvider.OPENAI]: 'openai'
 };
 
 interface SettingsModalProps {
@@ -44,6 +51,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   const [loadingSavedKeys, setLoadingSavedKeys] = useState(false);
   const [savedKeysError, setSavedKeysError] = useState<string | null>(null);
+  const [keyForm, setKeyForm] = useState<{ id: number | null; label: string; key: string }>({
+    id: null,
+    label: '',
+    key: ''
+  });
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [keyActionError, setKeyActionError] = useState<string | null>(null);
+  const [editingKeyLoadingId, setEditingKeyLoadingId] = useState<number | null>(null);
+
+  const fetchSavedKeysFromApi = React.useCallback(async (): Promise<SavedKeySummary[]> => {
+    if (!user) return [];
+    const response = await fetch('/api/keys');
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to load saved keys');
+    }
+    const validProviders: ProviderSlug[] = ['ollama', 'gemini', 'openai'];
+    const parsed: SavedKeySummary[] = Array.isArray(payload?.keys)
+      ? payload.keys
+          .filter((key: any) => validProviders.includes(key.provider))
+          .map((key: any) => ({
+            id: key.id,
+            provider: key.provider as ProviderSlug,
+            label: key.label,
+            updatedAt: key.updatedAt || key.updated_at || '',
+            lastFour: key.lastFour ?? key.last_four ?? null,
+          }))
+      : [];
+    return parsed;
+  }, [user]);
+
+  const refreshSavedKeys = React.useCallback(async () => {
+    if (!user) return;
+    setLoadingSavedKeys(true);
+    setSavedKeysError(null);
+    try {
+      const parsed = await fetchSavedKeysFromApi();
+      setSavedKeys(parsed);
+    } catch (err: any) {
+      setSavedKeysError(err?.message || 'Unable to load saved keys');
+    } finally {
+      setLoadingSavedKeys(false);
+    }
+  }, [fetchSavedKeysFromApi, user]);
 
   const handleChange = (key: keyof AppSettings, value: any) => {
     onUpdate({ ...settings, [key]: value });
@@ -53,6 +104,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setTestMessage('');
     }
   };
+    const handleKeyFormChange = (field: 'label' | 'key', value: string) => {
+      setKeyForm((prev) => ({ ...prev, [field]: value }));
+    };
+
 
   const handleTestConnection = async () => {
     setTestStatus('loading');
@@ -100,35 +155,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [isOpen, settings.provider, user]);
 
   React.useEffect(() => {
+    let cancelled = false;
     if (!isOpen || !user) {
       setSavedKeys([]);
       setSavedKeysError(null);
       setSelectedSavedKey({ ollama: null, gemini: null, openai: null });
+      setLoadingSavedKeys(false);
       return;
     }
-    let cancelled = false;
-    const fetchKeys = async () => {
+    const load = async () => {
       setLoadingSavedKeys(true);
       setSavedKeysError(null);
       try {
-        const response = await fetch('/api/keys');
-        if (!response.ok) {
-          throw new Error('Failed to load saved keys');
+        const parsed = await fetchSavedKeysFromApi();
+        if (!cancelled) {
+          setSavedKeys(parsed);
         }
-        const data = await response.json();
-        if (cancelled) return;
-        const validProviders: ProviderSlug[] = ['ollama', 'gemini', 'openai'];
-        const parsed: SavedKeySummary[] = Array.isArray(data?.keys)
-          ? data.keys
-              .filter((key: any) => validProviders.includes(key.provider))
-              .map((key: any) => ({
-                id: key.id,
-                provider: key.provider as ProviderSlug,
-                label: key.label,
-                updatedAt: key.updatedAt || key.updated_at || ''
-              }))
-          : [];
-        setSavedKeys(parsed);
       } catch (err: any) {
         if (!cancelled) {
           setSavedKeys([]);
@@ -138,12 +180,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         if (!cancelled) setLoadingSavedKeys(false);
       }
     };
-    fetchKeys();
+    load();
     return () => {
       cancelled = true;
     };
-  }, [isOpen, user]);
-
+  }, [fetchSavedKeysFromApi, isOpen, user]);
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
   const savedKeysByProvider = useMemo(() => {
@@ -160,6 +201,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return base;
   }, [savedKeys]);
 
+  const activeProviderSlug = MODEL_TO_PROVIDER[settings.provider];
+  const activeProviderLabel = MODEL_LABELS[settings.provider];
+  const activeProviderKeys = savedKeysByProvider[activeProviderSlug];
+
   const handleSavedKeySelect = async (provider: ProviderSlug, keyId: string) => {
     setSelectedSavedKey((prev) => ({ ...prev, [provider]: keyId || null }));
     if (!keyId) return;
@@ -175,6 +220,114 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     } catch (err) {
       console.warn('Unable to load saved key', err);
     }
+  };
+
+  const resetKeyForm = () => {
+    setKeyForm({ id: null, label: '', key: '' });
+    setKeyActionError(null);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    resetKeyForm();
+  }, [isOpen, settings.provider]);
+
+  const handleSavedKeySubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user) return;
+    const activeProvider = MODEL_TO_PROVIDER[settings.provider];
+    const label = keyForm.label.trim();
+    const secret = keyForm.key.trim();
+    if (!label) {
+      setKeyActionError('Label is required');
+      return;
+    }
+    if (!keyForm.id && !secret) {
+      setKeyActionError('API key is required');
+      return;
+    }
+    setIsSavingKey(true);
+    setKeyActionError(null);
+    try {
+      if (keyForm.id) {
+        const payload: Record<string, string> = { label };
+        if (secret) payload.key = secret;
+        const response = await fetch(`/api/keys/${keyForm.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to update key');
+        }
+      } else {
+        const response = await fetch('/api/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: activeProvider, label, key: secret })
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to save key');
+        }
+      }
+      await refreshSavedKeys();
+      resetKeyForm();
+    } catch (err: any) {
+      setKeyActionError(err?.message || 'Unable to save key');
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
+
+  const handleEditSavedKey = async (key: SavedKeySummary) => {
+    setKeyActionError(null);
+    setEditingKeyLoadingId(key.id);
+    try {
+      const response = await fetch(`/api/keys/${key.id}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load key');
+      }
+      setKeyForm({
+        id: key.id,
+        label: key.label,
+        key: data?.key?.value || ''
+      });
+    } catch (err: any) {
+      setKeyActionError(err?.message || 'Unable to load key');
+    } finally {
+      setEditingKeyLoadingId(null);
+    }
+  };
+
+  const handleDeleteSavedKey = async (id: number) => {
+    if (!user) return;
+    if (!window.confirm('Remove this key? This cannot be undone.')) return;
+    setKeyActionError(null);
+    try {
+      const response = await fetch(`/api/keys/${id}`, { method: 'DELETE' });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to delete key');
+      }
+      if (keyForm.id === id) {
+        resetKeyForm();
+      }
+      await refreshSavedKeys();
+    } catch (err: any) {
+      setKeyActionError(err?.message || 'Unable to delete key');
+    }
+  };
+
+  const handlePrefillSavedKey = (provider: ProviderSlug, id: number) => {
+    setSelectedSavedKey((prev) => ({ ...prev, [provider]: String(id) }));
+    handleSavedKeySelect(provider, String(id));
+  };
+
+  const handleKeyFormChange = (field: 'label' | 'key', value: string) => {
+    setKeyForm((prev) => ({ ...prev, [field]: value }));
   };
 
   if (!isOpen) return null;
@@ -319,6 +472,119 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {user ? 'Saved to your account' : 'Saved for this browser session only'}
                 </div>
               </>
+            )}
+
+            {user && (
+              <div className="space-y-3 border border-zinc-800 rounded-xl p-3 bg-zinc-950/50">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm text-white font-medium">
+                      <Key className="w-4 h-4 text-zinc-400" />
+                      Manage Keys
+                    </div>
+                    <p className="text-[11px] text-zinc-500">Applies to {activeProviderLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshSavedKeys}
+                    disabled={loadingSavedKeys}
+                    className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white transition disabled:opacity-50"
+                  >
+                    <RefreshCcw className={`w-3 h-3 ${loadingSavedKeys ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-36 overflow-y-auto">
+                  {loadingSavedKeys && activeProviderKeys.length === 0 ? (
+                    <div className="text-xs text-zinc-400">Loading saved keys...</div>
+                  ) : activeProviderKeys.length === 0 ? (
+                    <div className="text-xs text-zinc-500">
+                      No saved keys for {activeProviderLabel}. Add one below.
+                    </div>
+                  ) : (
+                    activeProviderKeys.map((key) => (
+                      <div key={key.id} className="flex items-center justify-between gap-3 border border-zinc-800 rounded-lg px-3 py-2">
+                        <div>
+                          <p className="text-sm text-white font-medium">{key.label}</p>
+                          <p className="text-[11px] text-zinc-500">•••• {key.lastFour || '????'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handlePrefillSavedKey(key.provider, key.id)}
+                            className="text-[11px] px-2 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            Use
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditSavedKey(key)}
+                            className="text-[11px] text-zinc-400 hover:text-white"
+                          >
+                            {editingKeyLoadingId === key.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Pencil className="w-3 h-3" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSavedKey(key.id)}
+                            className="text-[11px] text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <form className="space-y-2 border-t border-zinc-800 pt-3" onSubmit={handleSavedKeySubmit}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-zinc-400">
+                      {keyForm.id ? 'Editing saved key' : 'Add a new saved key'}
+                    </p>
+                    {keyForm.id && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-zinc-400 hover:text-white"
+                        onClick={resetKeyForm}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={keyForm.label}
+                    onChange={(e) => handleKeyFormChange('label', e.target.value)}
+                    placeholder="Label (e.g. Production)"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
+                  />
+                  <input
+                    type="password"
+                    value={keyForm.key}
+                    onChange={(e) => handleKeyFormChange('key', e.target.value)}
+                    placeholder={keyForm.id ? 'New key (optional)' : 'API key value'}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
+                  />
+                  {keyActionError && (
+                    <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                      {keyActionError}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isSavingKey}
+                    className="w-full flex items-center justify-center gap-2 bg-white text-black text-sm font-medium rounded-lg py-2 hover:bg-zinc-200 transition disabled:opacity-60"
+                  >
+                    {isSavingKey && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {keyForm.id ? 'Update Key' : `Save ${activeProviderLabel} Key`}
+                  </button>
+                </form>
+              </div>
             )}
             
             {/* CORS Helper Section */}
