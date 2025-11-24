@@ -1,8 +1,23 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal } from 'lucide-react';
 import { AppSettings, ModelProvider } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
 import { testConnection, saveOllamaKey, getOllamaKey } from '../services/llm';
+
+type ProviderSlug = 'ollama' | 'gemini' | 'openai';
+
+interface SavedKeySummary {
+  id: number;
+  provider: ProviderSlug;
+  label: string;
+  updatedAt: string;
+}
+
+const PROVIDER_FIELD_MAP: Record<ProviderSlug, keyof AppSettings> = {
+  ollama: 'ollamaKey',
+  gemini: 'geminiKey',
+  openai: 'openaiKey'
+};
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -21,6 +36,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
+  const [savedKeys, setSavedKeys] = useState<SavedKeySummary[]>([]);
+  const [selectedSavedKey, setSelectedSavedKey] = useState<Record<ProviderSlug, string | null>>({
+    ollama: null,
+    gemini: null,
+    openai: null
+  });
+  const [loadingSavedKeys, setLoadingSavedKeys] = useState(false);
+  const [savedKeysError, setSavedKeysError] = useState<string | null>(null);
 
   const handleChange = (key: keyof AppSettings, value: any) => {
     onUpdate({ ...settings, [key]: value });
@@ -76,8 +99,83 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return () => { mounted = false; };
   }, [isOpen, settings.provider, user]);
 
+  React.useEffect(() => {
+    if (!isOpen || !user) {
+      setSavedKeys([]);
+      setSavedKeysError(null);
+      setSelectedSavedKey({ ollama: null, gemini: null, openai: null });
+      return;
+    }
+    let cancelled = false;
+    const fetchKeys = async () => {
+      setLoadingSavedKeys(true);
+      setSavedKeysError(null);
+      try {
+        const response = await fetch('/api/keys');
+        if (!response.ok) {
+          throw new Error('Failed to load saved keys');
+        }
+        const data = await response.json();
+        if (cancelled) return;
+        const validProviders: ProviderSlug[] = ['ollama', 'gemini', 'openai'];
+        const parsed: SavedKeySummary[] = Array.isArray(data?.keys)
+          ? data.keys
+              .filter((key: any) => validProviders.includes(key.provider))
+              .map((key: any) => ({
+                id: key.id,
+                provider: key.provider as ProviderSlug,
+                label: key.label,
+                updatedAt: key.updatedAt || key.updated_at || ''
+              }))
+          : [];
+        setSavedKeys(parsed);
+      } catch (err: any) {
+        if (!cancelled) {
+          setSavedKeys([]);
+          setSavedKeysError(err?.message || 'Unable to load saved keys');
+        }
+      } finally {
+        if (!cancelled) setLoadingSavedKeys(false);
+      }
+    };
+    fetchKeys();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, user]);
+
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
+  const savedKeysByProvider = useMemo(() => {
+    const base: Record<ProviderSlug, SavedKeySummary[]> = {
+      ollama: [],
+      gemini: [],
+      openai: []
+    };
+    savedKeys.forEach((key) => {
+      if (base[key.provider]) {
+        base[key.provider].push(key);
+      }
+    });
+    return base;
+  }, [savedKeys]);
+
+  const handleSavedKeySelect = async (provider: ProviderSlug, keyId: string) => {
+    setSelectedSavedKey((prev) => ({ ...prev, [provider]: keyId || null }));
+    if (!keyId) return;
+    try {
+      const response = await fetch(`/api/keys/${keyId}`);
+      if (!response.ok) {
+        throw new Error('Failed to load saved key');
+      }
+      const data = await response.json();
+      const value = data?.key?.value;
+      if (!value) return;
+      handleChange(PROVIDER_FIELD_MAP[provider], value);
+    } catch (err) {
+      console.warn('Unable to load saved key', err);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -108,8 +206,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </select>
             </div>
 
+            {user && savedKeysError && (
+              <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                {savedKeysError}
+              </div>
+            )}
+
             {settings.provider === ModelProvider.GEMINI && (
               <>
+                {user && savedKeysByProvider.gemini.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Use Saved Key</label>
+                    <select
+                      value={selectedSavedKey.gemini || ''}
+                      onChange={(e) => handleSavedKeySelect('gemini', e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                    >
+                      <option value="">Select a saved key</option>
+                      {savedKeysByProvider.gemini.map((key) => (
+                        <option key={key.id} value={String(key.id)}>
+                          {key.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                  <div className="space-y-2">
                   <label className="text-sm text-zinc-300">Gemini Model</label>
                   <select
@@ -137,6 +258,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {settings.provider === ModelProvider.OPENAI && (
               <div className="space-y-2">
+                {user && savedKeysByProvider.openai.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Use Saved Key</label>
+                    <select
+                      value={selectedSavedKey.openai || ''}
+                      onChange={(e) => handleSavedKeySelect('openai', e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                    >
+                      <option value="">Select a saved key</option>
+                      {savedKeysByProvider.openai.map((key) => (
+                        <option key={key.id} value={String(key.id)}>
+                          {key.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <label className="text-sm text-zinc-300">OpenAI API Key</label>
                 <input
                   type="password"
@@ -150,6 +288,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {isOllama && (
               <>
+                {user && savedKeysByProvider.ollama.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Use Saved Key</label>
+                    <select
+                      value={selectedSavedKey.ollama || ''}
+                      onChange={(e) => handleSavedKeySelect('ollama', e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                    >
+                      <option value="">Select a saved key</option>
+                      {savedKeysByProvider.ollama.map((key) => (
+                        <option key={key.id} value={String(key.id)}>
+                          {key.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm text-zinc-300">API Key</label>
                   <input
