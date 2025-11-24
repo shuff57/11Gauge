@@ -229,8 +229,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     resetKeyForm();
   }, [isOpen, settings.provider]);
 
-  const handleSavedKeySubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSavedKeySubmit = async () => {
     if (!user) return;
     const label = keyForm.label.trim();
     const providerField = PROVIDER_FIELD_MAP[activeProviderSlug];
@@ -477,7 +476,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
 
             {user ? (
-              <div className="space-y-3 border border-zinc-800 rounded-xl p-3 bg-zinc-950/50">
+              <>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 text-sm text-white font-medium">
@@ -543,7 +542,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
 
-                <form className="space-y-2 border-t border-zinc-800 pt-3" onSubmit={handleSavedKeySubmit}>
+                <div className="space-y-2 border-t border-zinc-800 pt-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-zinc-400">
                       {keyForm.id ? `Editing ${activeProviderLabel} key` : `Add a ${activeProviderLabel} key`}
@@ -574,21 +573,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
                   <button
-                    type="submit"
+                    type="button"
                     disabled={isSavingKey}
                     className="w-full flex items-center justify-center gap-2 bg-white text-black text-sm font-medium rounded-lg py-2 hover:bg-zinc-200 transition disabled:opacity-60"
+                    onClick={handleSavedKeySubmit}
                   >
                     {isSavingKey && <Loader2 className="w-4 h-4 animate-spin" />}
                     {keyForm.id ? 'Update Key' : `Save ${activeProviderLabel} Key`}
                   </button>
-                </form>
-              </div>
+                </div>
+              </>
             ) : (
               <div className="border border-dashed border-zinc-800 rounded-xl p-3 text-xs text-zinc-500 bg-zinc-950/30">
                 Sign in to securely store and reuse provider keys across devices.
               </div>
             )}
-            
+
             {/* CORS Helper Section */}
             {isCorsError && (
               <div className="bg-zinc-950/50 rounded-lg p-3 border border-orange-500/30">
