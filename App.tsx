@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, Settings, RefreshCw, Zap, Flame } from 'lucide-react';
+import { Camera, Upload, Settings, RefreshCw, Zap, Flame, Image as ImageIcon } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { ResultPanel } from './components/ResultPanel';
 import { AppSettings } from './types';
@@ -149,29 +149,8 @@ export default function App() {
                 onClick={() => fileInputRef.current?.click()}
                 className="flex-1 flex flex-col items-center justify-center gap-6 hover:bg-zinc-900/80 transition-all group rounded-3xl p-6 bg-zinc-900/40 border border-zinc-800"
               >
-                <div className="relative w-48 h-48 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl overflow-hidden">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <svg 
-                      className="w-[150%] h-12 text-zinc-800 group-hover:text-zinc-600 transition-colors -rotate-45" 
-                      viewBox="0 0 100 20" 
-                      preserveAspectRatio="none"
-                    >
-                      <path 
-                        d="M0 10 L42 10 L38 0 L62 20 L58 10 L100 10" 
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        fill="none" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                  <div className="absolute top-10 left-10">
-                    <Camera className="w-12 h-12 text-zinc-400 group-hover:text-white transition-colors" />
-                  </div>
-                  <div className="absolute bottom-10 right-10">
-                    <Upload className="w-12 h-12 text-zinc-400 group-hover:text-white transition-colors" />
-                  </div>
+                <div className="w-48 h-48 p-6 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center">
+                  <ImageIcon className="w-24 h-24 text-zinc-400 group-hover:text-white transition-colors" />
                 </div>
               </button>
             </div>
