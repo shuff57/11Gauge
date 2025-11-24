@@ -17,7 +17,7 @@ const defaultOllamaModel = process.env.OLLAMA_MODEL || defaultCloudVisionModel;
 const defaultOllamaKey = process.env.OLLAMA_API_KEY || '';
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  provider: ModelProvider.GEMINI,
+  provider: ModelProvider.OLLAMA,
   geminiKey: '',
   geminiModel: 'gemini-2.5-flash',
   openaiKey: '',

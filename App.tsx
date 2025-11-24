@@ -5,7 +5,6 @@ import { ResultPanel } from './components/ResultPanel';
 import { AppSettings } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
 import { analyzeImage } from './services/llm';
-import { Dock } from './components/Dock';
 
 export default function App() {
   // State
@@ -85,29 +84,6 @@ export default function App() {
     }
   };
 
-  const dockItems = [
-    {
-      icon: <Camera className="w-5 h-5 text-white" />,
-      label: (
-        <div className="flex flex-col text-[11px] leading-tight text-white">
-          <span className="font-semibold">Use Camera</span>
-          <span className="text-[10px] text-zinc-400">Live capture</span>
-        </div>
-      ),
-      onClick: () => cameraInputRef.current?.click(),
-    },
-    {
-      icon: <Upload className="w-5 h-5 text-white" />,
-      label: (
-        <div className="flex flex-col text-[11px] leading-tight text-white">
-          <span className="font-semibold">Upload Image</span>
-          <span className="text-[10px] text-zinc-400">JPG · PNG</span>
-        </div>
-      ),
-      onClick: () => fileInputRef.current?.click(),
-    },
-  ];
-
 
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 selection:bg-zinc-800">
@@ -152,12 +128,12 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-        <div className="max-w-3xl mx-auto w-full min-h-full flex flex-col p-6">
+        <div className="mx-[5vw] min-h-full flex flex-col p-6">
           
           {/* Empty State / Logo with overlay inputs */}
           {!selectedFile && (
-            <div className="flex-1 relative w-full text-zinc-600">
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 text-center">
+            <div className="flex-1 flex flex-col gap-4 w-full text-zinc-600">
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
                 <img 
                   src="/11gauge-logo.png" 
                   alt="11Gauge Logo" 
@@ -168,18 +144,36 @@ export default function App() {
                   Upload a photo or use your camera to get instant AI insights using {MODEL_LABELS[settings.provider]}.
                 </p>
               </div>
-              <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center pointer-events-none">
-                <div className="pointer-events-auto">
-                  <Dock
-                    items={dockItems}
-                    panelHeight={80}
-                    baseItemSize={56}
-                    magnification={92}
-                    dockHeight={220}
-                    className="backdrop-blur-lg border-white/10"
-                  />
+              
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 flex flex-col items-center justify-center gap-6 hover:bg-zinc-900/80 transition-all group rounded-3xl p-6 bg-zinc-900/40 border border-zinc-800"
+              >
+                <div className="relative w-48 h-48 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl overflow-hidden">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg 
+                      className="w-[150%] h-12 text-zinc-800 group-hover:text-zinc-600 transition-colors -rotate-45" 
+                      viewBox="0 0 100 20" 
+                      preserveAspectRatio="none"
+                    >
+                      <path 
+                        d="M0 10 L42 10 L38 0 L62 20 L58 10 L100 10" 
+                        stroke="currentColor" 
+                        strokeWidth="2" 
+                        fill="none" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                  <div className="absolute top-10 left-10">
+                    <Camera className="w-12 h-12 text-zinc-400 group-hover:text-white transition-colors" />
+                  </div>
+                  <div className="absolute bottom-10 right-10">
+                    <Upload className="w-12 h-12 text-zinc-400 group-hover:text-white transition-colors" />
+                  </div>
                 </div>
-              </div>
+              </button>
             </div>
           )}
 
