@@ -126,6 +126,7 @@ const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
 
   if (!response.ok) {
     const data = await response.json().catch(() => undefined);
-    throw new Error(data?.error || `Connection failed (${response.status}).`);
+    console.error("Ollama Test Failed:", { status: response.status, data });
+    throw new Error(data?.error || `Connection failed (${response.status}). Check your API key and URL.`);
   }
 };
