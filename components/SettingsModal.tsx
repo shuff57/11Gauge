@@ -129,7 +129,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
                     placeholder="Bearer token (optional)"
                   />
-                  <p className="text-[10px] text-zinc-500">Endpoint and model come from the build configuration.</p>
                 </div>
               </>
             )}

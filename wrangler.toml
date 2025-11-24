@@ -1,0 +1,12 @@
+name = "11gauge"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "USERS_DB"
+database_name = "users-db"
+database_id = "fedecc09-ebc1-4655-8a05-d19f51e3988a"
+
+[[d1_databases]]
+binding = "KEY_STORE"
+database_name = "users-db"
+database_id = "fedecc09-ebc1-4655-8a05-d19f51e3988a"

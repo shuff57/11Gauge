@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, Settings, RefreshCw, Zap, Flame, Image as ImageIcon } from 'lucide-react';
+import { Camera, Upload, Settings, RefreshCw, Zap, Flame, Image as ImageIcon, LogIn, User } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
+import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
 import { AppSettings } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
@@ -28,7 +29,14 @@ export default function App() {
   });
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [user, setUser] = useState<{ email: string } | null>(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -42,6 +50,53 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('vision-settings', JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!userMenuRef.current) return;
+      if (!(e.target instanceof Node)) return;
+      if (!userMenuRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsUserMenuOpen(false);
+    }
+
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, []);
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authSuccess = params.get('auth_success');
+    const email = params.get('email');
+    const authError = params.get('auth_error');
+
+    if (authSuccess === 'true' && email) {
+      setUser({ email: decodeURIComponent(email) });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (authError) {
+      console.error('Auth error:', authError);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   // Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,7 +141,7 @@ export default function App() {
 
 
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-950 selection:bg-zinc-800">
+    <div className="flex flex-col h-[100dvh] w-full bg-zinc-950 selection:bg-zinc-800">
       
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-900/50 shrink-0">
@@ -116,6 +171,58 @@ export default function App() {
           >
             <Settings className="w-5 h-5" />
           </button>
+          {user ? (
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setIsUserMenuOpen((s) => !s)}
+                className="w-9 h-9 rounded-full bg-zinc-800 text-zinc-200 flex items-center justify-center font-semibold text-sm hover:bg-zinc-700 transition-colors"
+                title={user.email}
+                aria-haspopup="true"
+                aria-expanded={isUserMenuOpen}
+              >
+                {user.email
+                  .split('@')[0]
+                  .split(/[._-]/)
+                  .filter(Boolean)
+                  .slice(0,2)
+                  .map(part => part[0].toUpperCase())
+                  .join('') || 'U'}
+              </button>
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-40 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg z-50 py-2">
+                  <div className="px-3 py-1 text-xs text-zinc-400 truncate">{user.email}</div>
+                  <button
+                    onClick={async () => {
+                      // Optional server-side signout can go here
+                      setUser(null);
+                      setIsUserMenuOpen(false);
+                      setIsAuthOpen(false);
+                      try {
+                        await fetch('/api/auth/signout', { method: 'POST' });
+                      } catch {}
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button 
+              onClick={() => setIsAuthOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all"
+            >
+              <LogIn className="w-4 h-4" />
+              <span className="font-medium">Sign In</span>
+            </button>
+          )}
+
+          <AuthModal
+            isOpen={isAuthOpen}
+            onClose={() => setIsAuthOpen(false)}
+            onSuccess={(user) => setUser(user)}
+          />
 
           <SettingsModal 
             isOpen={isSettingsOpen} 
@@ -187,7 +294,7 @@ export default function App() {
       </main>
 
       {/* Bottom Control Bar */}
-      <div className="shrink-0 p-6 pt-2 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent">
+      <div className="shrink-0 px-6 pt-2 pb-8 sm:pb-6 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent">
         <div className="max-w-2xl mx-auto">
           {/* Input cards now occupy the lower half of the viewport via the main overlay */}
 

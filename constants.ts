@@ -14,7 +14,7 @@ Structure your response as follows:
 const defaultOllamaUrl = process.env.OLLAMA_URL || '';
 const defaultCloudVisionModel = 'qwen3-vl:235b-instruct-cloud';
 const defaultOllamaModel = process.env.OLLAMA_MODEL || defaultCloudVisionModel;
-const defaultOllamaKey = process.env.OLLAMA_API_KEY || '';
+const defaultOllamaKey = '';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   provider: ModelProvider.OLLAMA,
@@ -27,9 +27,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const MODEL_LABELS = {
-  [ModelProvider.GEMINI]: 'Gemini',
-  [ModelProvider.OPENAI]: 'OpenAI',
-  [ModelProvider.OLLAMA]: 'Ollama',
+  [ModelProvider.GEMINI]: 'Gemini (Google)',
+  [ModelProvider.OPENAI]: 'OpenAI (ChatGPT)',
+  [ModelProvider.OLLAMA]: 'Ollama (OpenSource)',
 };
 
 export const GEMINI_MODELS = [

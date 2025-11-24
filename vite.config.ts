@@ -10,11 +10,15 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         proxy: {
           '/api/ollama': {
-            target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8787',
+            target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8788',
             changeOrigin: true,
           },
           '/api/keys': {
-            target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8787',
+            target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8788',
+            changeOrigin: true,
+          },
+          '/api/auth': {
+            target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8788',
             changeOrigin: true,
           },
         },
