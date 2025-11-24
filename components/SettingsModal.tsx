@@ -150,6 +150,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
                     placeholder="e.g. llava, llama3.2-vision"
                   />
+                  <p className="text-[10px] text-zinc-500">Leave blank to auto-use Ollama Cloud Vision.</p>
                 </div>
               </>
             )}

@@ -43,104 +43,67 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-const normalizeUrl = (url: string) => {
-  let clean = url.trim().replace(/\/$/, "");
-  
-  // If protocol is missing
-  if (!/^https?:\/\//i.test(clean)) {
-    // Default to http for local connections, https for remote
-    if (clean.includes('localhost') || clean.includes('127.0.0.1') || clean.includes('0.0.0.0')) {
-      clean = `http://${clean}`;
-    } else {
-      clean = `https://${clean}`;
-    }
-  }
-  return clean;
+
+const getOllamaModel = (settings: AppSettings) => {
+  return settings.ollamaModel?.trim() || process.env.OLLAMA_MODEL || "llama3.2-vision";
 };
 
 // Fetch implementation for Ollama API
 const analyzeWithOllama = async (dataUri: string, settings: AppSettings): Promise<string> => {
-  if (!settings.ollamaUrl) {
-    throw new Error("Please configure your Ollama Cloud URL in settings.");
+  const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
+  if (!configuredUrl) {
+    throw new Error("Please configure your Ollama Cloud URL in settings or .env.");
   }
 
   const rawBase64 = dataUri.split(',')[1];
-  const baseUrl = normalizeUrl(settings.ollamaUrl);
-  
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ollamaKey?.trim()) {
-    headers["Authorization"] = `Bearer ${settings.ollamaKey.trim()}`;
-  }
+  const apiKey = settings.ollamaKey?.trim() || process.env.OLLAMA_API_KEY || '';
 
   try {
-    const response = await fetch(`${baseUrl}/api/generate`, {
+    const response = await fetch(`/api/ollama/generate`, {
       method: "POST",
-      headers: headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: settings.ollamaModel || "llava",
+        url: configuredUrl,
+        key: apiKey || undefined,
+        model: getOllamaModel(settings),
         prompt: SYSTEM_PROMPT,
         images: [rawBase64],
         stream: false
       })
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("Unauthorized. Please check your API Key.");
-      }
-      if (response.status === 404) {
-        throw new Error(`Model '${settings.ollamaModel}' not found on server.`);
-      }
-      throw new Error(`Request failed (${response.status}).`);
+      throw new Error(data?.error || `Request failed (${response.status}).`);
     }
 
-    const data = await response.json();
     return data.response || "No response text generated.";
   } catch (err: any) {
-    if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('NetworkError'))) {
-      throw new Error('Connection failed. This is usually a CORS issue. See settings for help.');
-    }
-    throw err;
+    throw new Error(err?.message || 'Ollama request failed.');
   }
 };
 
 const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
-  if (!settings.ollamaUrl) {
-    throw new Error("URL is required.");
+  const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
+  if (!configuredUrl) {
+    throw new Error("URL is required. Provide it in settings or .env.");
   }
 
-  const baseUrl = normalizeUrl(settings.ollamaUrl);
-  
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ollamaKey?.trim()) {
-    headers["Authorization"] = `Bearer ${settings.ollamaKey.trim()}`;
-  }
+  const apiKey = settings.ollamaKey?.trim() || process.env.OLLAMA_API_KEY || '';
 
-  // We use the generate endpoint with a simple text prompt to verify model access
-  try {
-    const response = await fetch(`${baseUrl}/api/generate`, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify({
-        model: settings.ollamaModel || "llava",
-        prompt: "Hello",
-        stream: false
-      })
-    });
+  const response = await fetch(`/api/ollama/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: configuredUrl,
+      key: apiKey || undefined,
+      model: getOllamaModel(settings)
+    })
+  });
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("Unauthorized. Check API Key.");
-      }
-      if (response.status === 404) {
-        throw new Error(`Model '${settings.ollamaModel}' not found.`);
-      }
-      throw new Error(`Connection failed (${response.status}).`);
-    }
-  } catch (err: any) {
-    if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('NetworkError'))) {
-      throw new Error('Connection failed. This is usually a CORS issue.');
-    }
-    throw err;
+  if (!response.ok) {
+    const data = await response.json().catch(() => undefined);
+    throw new Error(data?.error || `Connection failed (${response.status}).`);
   }
 };

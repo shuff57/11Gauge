@@ -11,14 +11,19 @@ Structure your response as follows:
 4. **Text Content**: Any visible text (if applicable).
 `;
 
+const defaultOllamaUrl = process.env.OLLAMA_URL || '';
+const defaultCloudVisionModel = 'llama3.2-vision';
+const defaultOllamaModel = process.env.OLLAMA_MODEL || defaultCloudVisionModel;
+const defaultOllamaKey = process.env.OLLAMA_API_KEY || '';
+
 export const DEFAULT_SETTINGS: AppSettings = {
   provider: ModelProvider.GEMINI,
   geminiKey: '',
   geminiModel: 'gemini-2.5-flash',
   openaiKey: '',
-  ollamaUrl: '', // Default to empty to encourage user input for Cloud URL
-  ollamaModel: 'llava',
-  ollamaKey: '',
+  ollamaUrl: defaultOllamaUrl,
+  ollamaModel: defaultOllamaModel,
+  ollamaKey: defaultOllamaKey,
 };
 
 export const MODEL_LABELS = {
