@@ -3,7 +3,6 @@ import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn } from 'lucide-reac
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
-import { KeyManagerPanel } from './components/KeyManagerPanel';
 import { AppSettings } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
 import { analyzeImage, getOllamaKey, saveOllamaKey } from './services/llm';
@@ -42,7 +41,6 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
-  const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
 
   // Refs for hidden inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,7 +56,6 @@ export default function App() {
       localStorage.setItem('user', JSON.stringify(user));
     } else {
       localStorage.removeItem('user');
-      setIsKeyManagerOpen(false);
     }
   }, [user]);
 
@@ -250,7 +247,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false);
-                      setIsKeyManagerOpen(true);
+                      setIsSettingsOpen(true);
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
                   >
@@ -295,11 +292,6 @@ export default function App() {
             settings={settings}
             onUpdate={setSettings}
             user={user}
-          />
-
-          <KeyManagerPanel
-            isOpen={Boolean(user) && isKeyManagerOpen}
-            onClose={() => setIsKeyManagerOpen(false)}
           />
 
         </div>

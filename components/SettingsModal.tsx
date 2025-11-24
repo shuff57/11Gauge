@@ -51,10 +51,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   const [loadingSavedKeys, setLoadingSavedKeys] = useState(false);
   const [savedKeysError, setSavedKeysError] = useState<string | null>(null);
-  const [keyForm, setKeyForm] = useState<{ id: number | null; label: string; key: string }>({
+  const [keyForm, setKeyForm] = useState<{ id: number | null; label: string }>({
     id: null,
-    label: '',
-    key: ''
+    label: ''
   });
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [keyActionError, setKeyActionError] = useState<string | null>(null);
@@ -104,9 +103,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setTestMessage('');
     }
   };
-    const handleKeyFormChange = (field: 'label' | 'key', value: string) => {
-      setKeyForm((prev) => ({ ...prev, [field]: value }));
-    };
 
 
   const handleTestConnection = async () => {
@@ -185,6 +181,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       cancelled = true;
     };
   }, [fetchSavedKeysFromApi, isOpen, user]);
+
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
   const savedKeysByProvider = useMemo(() => {
@@ -223,7 +220,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const resetKeyForm = () => {
-    setKeyForm({ id: null, label: '', key: '' });
+    setKeyForm({ id: null, label: '' });
     setKeyActionError(null);
   };
 
@@ -235,15 +232,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSavedKeySubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!user) return;
-    const activeProvider = MODEL_TO_PROVIDER[settings.provider];
     const label = keyForm.label.trim();
-    const secret = keyForm.key.trim();
+    const providerField = PROVIDER_FIELD_MAP[activeProviderSlug];
+    const currentSecret = (settings[providerField] || '').trim();
     if (!label) {
       setKeyActionError('Label is required');
       return;
     }
-    if (!keyForm.id && !secret) {
-      setKeyActionError('API key is required');
+    if (!keyForm.id && !currentSecret) {
+      setKeyActionError('Enter an API key above before saving.');
       return;
     }
     setIsSavingKey(true);
@@ -251,7 +248,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       if (keyForm.id) {
         const payload: Record<string, string> = { label };
-        if (secret) payload.key = secret;
+        if (currentSecret) payload.key = currentSecret;
         const response = await fetch(`/api/keys/${keyForm.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -265,7 +262,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         const response = await fetch('/api/keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: activeProvider, label, key: secret })
+          body: JSON.stringify({ provider: activeProviderSlug, label, key: currentSecret })
         });
         const data = await response.json().catch(() => null);
         if (!response.ok) {
@@ -292,9 +289,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
       setKeyForm({
         id: key.id,
-        label: key.label,
-        key: data?.key?.value || ''
+        label: key.label
       });
+      const providerField = PROVIDER_FIELD_MAP[key.provider];
+      if (data?.key?.value) {
+        handleChange(providerField, data.key.value);
+        setSelectedSavedKey((prev) => ({ ...prev, [key.provider]: String(key.id) }));
+      }
     } catch (err: any) {
       setKeyActionError(err?.message || 'Unable to load key');
     } finally {
@@ -326,22 +327,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     handleSavedKeySelect(provider, String(id));
   };
 
-  const handleKeyFormChange = (field: 'label' | 'key', value: string) => {
-    setKeyForm((prev) => ({ ...prev, [field]: value }));
+  const handleKeyFormChange = (value: string) => {
+    setKeyForm((prev) => ({ ...prev, label: value }));
   };
 
   if (!isOpen) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-full right-0 mt-2 z-50 w-80 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[80vh] origin-top-right animate-in fade-in zoom-in-95 duration-100">
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-zinc-400" />
-            <h2 className="text-sm font-medium text-white">Settings</h2>
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-20 lg:pt-24">
+        <div className="w-full h-full sm:h-auto sm:w-[min(90vw,36rem)] lg:w-1/2 lg:max-w-[48rem] bg-zinc-900 border border-zinc-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
+            <div className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-zinc-400" />
+              <h2 className="text-sm font-medium text-white">Settings</h2>
+            </div>
           </div>
-        </div>
 
         <div className="p-4 space-y-5 overflow-y-auto custom-scrollbar">
           <div className="space-y-4">
@@ -474,7 +476,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </>
             )}
 
-            {user && (
+            {user ? (
               <div className="space-y-3 border border-zinc-800 rounded-xl p-3 bg-zinc-950/50">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -482,7 +484,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Key className="w-4 h-4 text-zinc-400" />
                       Manage Keys
                     </div>
-                    <p className="text-[11px] text-zinc-500">Applies to {activeProviderLabel}</p>
+                    <p className="text-[11px] text-zinc-500">Stored keys for {activeProviderLabel}</p>
                   </div>
                   <button
                     type="button"
@@ -544,7 +546,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <form className="space-y-2 border-t border-zinc-800 pt-3" onSubmit={handleSavedKeySubmit}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-zinc-400">
-                      {keyForm.id ? 'Editing saved key' : 'Add a new saved key'}
+                      {keyForm.id ? `Editing ${activeProviderLabel} key` : `Add a ${activeProviderLabel} key`}
                     </p>
                     {keyForm.id && (
                       <button
@@ -559,17 +561,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <input
                     type="text"
                     value={keyForm.label}
-                    onChange={(e) => handleKeyFormChange('label', e.target.value)}
+                    onChange={(e) => handleKeyFormChange(e.target.value)}
                     placeholder="Label (e.g. Production)"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
                   />
-                  <input
-                    type="password"
-                    value={keyForm.key}
-                    onChange={(e) => handleKeyFormChange('key', e.target.value)}
-                    placeholder={keyForm.id ? 'New key (optional)' : 'API key value'}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                  />
+                  <p className="text-[11px] text-zinc-500">
+                    Uses the current {activeProviderLabel} API key value above.
+                  </p>
                   {keyActionError && (
                     <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                       {keyActionError}
@@ -584,6 +582,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {keyForm.id ? 'Update Key' : `Save ${activeProviderLabel} Key`}
                   </button>
                 </form>
+              </div>
+            ) : (
+              <div className="border border-dashed border-zinc-800 rounded-xl p-3 text-xs text-zinc-500 bg-zinc-950/30">
+                Sign in to securely store and reuse provider keys across devices.
               </div>
             )}
             
@@ -651,6 +653,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Done
             </button>
           </div>
+        </div>
         </div>
       </div>
     </>
