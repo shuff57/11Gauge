@@ -21,6 +21,27 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (!id.includes('node_modules')) {
+                return undefined;
+              }
+              if (id.includes('react-markdown') || id.includes('remark')) {
+                return 'markdown-chunk';
+              }
+              if (id.includes('lucide-react')) {
+                return 'icons-chunk';
+              }
+              if (id.includes('react')) {
+                return 'react-vendor';
+              }
+              return 'vendor';
+            }
+          }
+        }
       }
     };
 });
