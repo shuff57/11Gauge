@@ -1,4 +1,11 @@
-const CLOUD_VISION_MODEL = "llama3.2-vision";
+const CLOUD_VISION_MODEL = "qwen3-vl:235b-instruct-cloud";
+const OLLAMA_KEY_STORAGE_KEY = "ollama_api_key";
+
+interface KeyStore {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+  delete?(key: string): Promise<void>;
+}
 
 const normalizeUrl = (value?: string): string => {
   if (!value) return "";
@@ -22,9 +29,25 @@ const resolveBaseUrl = (provided?: string, fallback?: string): string => {
   return normalized;
 };
 
-const resolveApiKey = (provided?: string, fallback?: string): string | undefined => {
-  const key = (provided || fallback || "").trim();
-  return key || undefined;
+interface ApiKeyOptions {
+  provided?: string;
+  fallback?: string;
+  store?: KeyStore;
+}
+
+const resolveApiKey = async (options: ApiKeyOptions): Promise<string | undefined> => {
+  const direct = (options.provided || "").trim();
+  if (direct) return direct;
+
+  const fallback = (options.fallback || "").trim();
+  if (fallback) return fallback;
+
+  if (options.store) {
+    const stored = (await options.store.get(OLLAMA_KEY_STORAGE_KEY))?.trim();
+    if (stored) return stored;
+  }
+
+  return undefined;
 };
 
 const resolveModel = (provided?: string, fallback?: string): string => {
@@ -74,6 +97,8 @@ const relayResponse = async (response: Response): Promise<Response> => {
 
 export {
   CLOUD_VISION_MODEL,
+  OLLAMA_KEY_STORAGE_KEY,
+  type KeyStore,
   normalizeUrl,
   resolveBaseUrl,
   resolveApiKey,

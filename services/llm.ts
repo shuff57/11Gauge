@@ -34,6 +34,28 @@ export const testConnection = async (settings: AppSettings): Promise<void> => {
   }
 };
 
+export const saveOllamaKey = async (key?: string): Promise<boolean> => {
+  const trimmed = key?.trim();
+  if (!trimmed) return false;
+
+  try {
+    const response = await fetch('/api/keys/ollama', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: trimmed })
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to persist Ollama key', await response.text().catch(() => ''));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Unable to store Ollama key', err);
+    return false;
+  }
+};
+
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -45,7 +67,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 
 const getOllamaModel = (settings: AppSettings) => {
-  return settings.ollamaModel?.trim() || process.env.OLLAMA_MODEL || "llama3.2-vision";
+  return settings.ollamaModel?.trim() || process.env.OLLAMA_MODEL || "qwen3-vl:235b-instruct-cloud";
 };
 
 // Fetch implementation for Ollama API

@@ -12,7 +12,7 @@ Structure your response as follows:
 `;
 
 const defaultOllamaUrl = process.env.OLLAMA_URL || '';
-const defaultCloudVisionModel = 'llama3.2-vision';
+const defaultCloudVisionModel = 'qwen3-vl:235b-instruct-cloud';
 const defaultOllamaModel = process.env.OLLAMA_MODEL || defaultCloudVisionModel;
 const defaultOllamaKey = process.env.OLLAMA_API_KEY || '';
 

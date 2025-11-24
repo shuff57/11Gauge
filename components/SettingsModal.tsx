@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal } from 'lucide-react';
 import { AppSettings, ModelProvider } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
-import { testConnection } from '../services/llm';
+import { testConnection, saveOllamaKey } from '../services/llm';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -36,8 +36,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTestMessage('');
     try {
       await testConnection(settings);
+      let keyStored = false;
+      if (settings.provider === ModelProvider.OLLAMA) {
+        keyStored = await saveOllamaKey(settings.ollamaKey);
+      }
       setTestStatus('success');
-      setTestMessage('Connection verified successfully.');
+      setTestMessage(keyStored ? 'Connection verified and key saved securely.' : 'Connection verified successfully.');
     } catch (err: any) {
       setTestStatus('error');
       setTestMessage(err.message || 'Connection failed.');
@@ -119,18 +123,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {isOllama && (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm text-zinc-300">Endpoint URL</label>
-                  <input
-                    type="text"
-                    value={settings.ollamaUrl}
-                    onChange={(e) => handleChange('ollamaUrl', e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                    placeholder="http://localhost:11434"
-                  />
-                  <p className="text-[10px] text-zinc-500">For local use, enter http://localhost:11434</p>
-                </div>
-
-                <div className="space-y-2">
                   <label className="text-sm text-zinc-300">API Key</label>
                   <input
                     type="password"
@@ -139,18 +131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
                     placeholder="Bearer token (optional)"
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm text-zinc-300">Model Name</label>
-                  <input
-                    type="text"
-                    value={settings.ollamaModel}
-                    onChange={(e) => handleChange('ollamaModel', e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                    placeholder="e.g. llava, llama3.2-vision"
-                  />
-                  <p className="text-[10px] text-zinc-500">Leave blank to auto-use Ollama Cloud Vision.</p>
+                  <p className="text-[10px] text-zinc-500">Endpoint and model come from the build configuration.</p>
                 </div>
               </>
             )}

@@ -3,13 +3,15 @@ import {
   resolveApiKey,
   resolveModel,
   forwardToOllama,
-  relayResponse
+  relayResponse,
+  type KeyStore
 } from "../../utils/ollama";
 
 interface Env {
   OLLAMA_URL?: string;
   OLLAMA_MODEL?: string;
   OLLAMA_API_KEY?: string;
+  KEY_STORE?: KeyStore;
 }
 
 export const onRequest = async (context: { request: Request; env: Env }) => {
@@ -31,7 +33,11 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
 
   try {
     const baseUrl = resolveBaseUrl(payload?.url, env.OLLAMA_URL);
-    const apiKey = resolveApiKey(payload?.key, env.OLLAMA_API_KEY);
+    const apiKey = await resolveApiKey({
+      provided: payload?.key,
+      fallback: env.OLLAMA_API_KEY,
+      store: env.KEY_STORE
+    });
     const model = resolveModel(payload?.model, env.OLLAMA_MODEL);
     const prompt = payload?.prompt;
     const images: string[] | undefined = payload?.images;

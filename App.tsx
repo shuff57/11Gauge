@@ -8,9 +8,23 @@ import { analyzeImage } from './services/llm';
 
 export default function App() {
   // State
+  const hydrateSettings = (raw: AppSettings | null): AppSettings => {
+    const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
+    if (raw?.ollamaModel === 'llama3.2-vision') {
+      merged.ollamaModel = DEFAULT_SETTINGS.ollamaModel;
+    }
+    if (!merged.ollamaUrl) {
+      merged.ollamaUrl = DEFAULT_SETTINGS.ollamaUrl;
+    }
+    if (!merged.ollamaModel) {
+      merged.ollamaModel = DEFAULT_SETTINGS.ollamaModel;
+    }
+    return merged;
+  };
+
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('vision-settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    return hydrateSettings(saved ? JSON.parse(saved) : null);
   });
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -69,6 +83,7 @@ export default function App() {
       setIsAnalyzing(false);
     }
   };
+
 
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 selection:bg-zinc-800">
