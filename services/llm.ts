@@ -1,4 +1,4 @@
-import { AppSettings, MediaPayload, ModelProvider } from "../types";
+import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider } from "../types";
 import { SYSTEM_PROMPT } from "../constants";
 import { analyzeWithGemini, testGeminiConnection } from "./gemini";
 import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
@@ -11,19 +11,36 @@ export const VIDEO_UPLOAD_LIMITS = {
 
 const VIDEO_FRAME_SPACING_SECONDS = 2;
 
+type ProgressCallback = (progress: AnalysisProgress) => void;
+interface AnalyzeMediaOptions {
+  onProgress?: ProgressCallback;
+}
+
+const finalizeWithProgress = async (
+  runner: () => Promise<string>,
+  onProgress?: ProgressCallback
+): Promise<string> => {
+  const result = await runner();
+  onProgress?.({ phase: 'receiving-response', message: 'Formatting insights...' });
+  return result;
+};
+
 export const analyzeMedia = async (
   file: File,
-  settings: AppSettings
+  settings: AppSettings,
+  options?: AnalyzeMediaOptions
 ): Promise<string> => {
-  const payload = await buildMediaPayload(file);
+  options?.onProgress?.({ phase: 'preparing-media', message: 'Preparing upload...' });
+  const payload = await buildMediaPayload(file, options?.onProgress);
+  options?.onProgress?.({ phase: 'awaiting-model', message: 'Sending media to model...' });
 
   switch (settings.provider) {
     case ModelProvider.GEMINI:
-      return analyzeWithGemini(payload, settings);
+      return finalizeWithProgress(() => analyzeWithGemini(payload, settings), options?.onProgress);
     case ModelProvider.OPENAI:
-      return analyzeWithOpenAI(payload, settings);
+      return finalizeWithProgress(() => analyzeWithOpenAI(payload, settings), options?.onProgress);
     case ModelProvider.OLLAMA:
-      return analyzeWithOllama(payload, settings);
+      return finalizeWithProgress(() => analyzeWithOllama(payload, settings), options?.onProgress);
     default:
       throw new Error("Invalid provider selected");
   }
@@ -110,17 +127,41 @@ const analyzeWithOllama = async (payload: MediaPayload, settings: AppSettings): 
         model: getOllamaModel(settings),
         prompt: promptPrefix,
         images,
-        stream: false
+        stream: true
       })
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      throw new Error(data?.error || `Request failed (${response.status}).`);
+      const failure = await response.json().catch(() => undefined);
+      throw new Error(failure?.error || `Request failed (${response.status}).`);
     }
 
-    return data.response || "No response text generated.";
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Unable to read streaming response.');
+    }
+
+    let acc = '';
+    const decoder = new TextDecoder();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true }).trim();
+      if (!chunk) continue;
+      for (const line of chunk.split('\n')) {
+        if (!line) continue;
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed?.response) {
+            acc += parsed.response;
+          }
+        } catch {
+          // ignore partial lines until they form valid JSON
+        }
+      }
+    }
+
+    return acc || "No response text generated.";
   } catch (err: any) {
     throw new Error(err?.message || 'Ollama request failed.');
   }
@@ -151,7 +192,10 @@ const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
   }
 };
 
-const buildMediaPayload = async (file: File): Promise<MediaPayload> => {
+const buildMediaPayload = async (
+  file: File,
+  onProgress?: ProgressCallback
+): Promise<MediaPayload> => {
   const mimeType = file.type || '';
   const isImage = mimeType.startsWith('image/');
   const isVideo = mimeType.startsWith('video/');
@@ -165,10 +209,12 @@ const buildMediaPayload = async (file: File): Promise<MediaPayload> => {
       const maxMb = Math.floor(VIDEO_UPLOAD_LIMITS.maxFileBytes / (1024 * 1024));
       throw new Error(`Video files must be smaller than ${maxMb}MB.`);
     }
-    return extractVideoPayload(file);
+    onProgress?.({ phase: 'processing-video', message: 'Extracting frames...' });
+    return extractVideoPayload(file, onProgress);
   }
 
   const dataUrl = await fileToBase64(file);
+  onProgress?.({ phase: 'preparing-media', message: 'Image ready for analysis.' });
   return {
     frames: [{ dataUrl, mimeType: mimeType || 'image/jpeg', timestampSeconds: 0 }],
     kind: 'image'
@@ -184,7 +230,10 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-const extractVideoPayload = (file: File): Promise<MediaPayload> => {
+const extractVideoPayload = (
+  file: File,
+  onProgress?: ProgressCallback
+): Promise<MediaPayload> => {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const video = document.createElement('video');
@@ -248,6 +297,12 @@ const extractVideoPayload = (file: File): Promise<MediaPayload> => {
           dataUrl,
           mimeType: 'image/jpeg',
           timestampSeconds: Number(sampleTimes[index].toFixed(2))
+        });
+        onProgress?.({
+          phase: 'processing-video',
+          message: `Captured frame ${frames.length}/${sampleTimes.length}`,
+          framesCaptured: frames.length,
+          totalFrames: sampleTimes.length
         });
         index += 1;
 

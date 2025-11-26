@@ -28,6 +28,19 @@ export interface MediaPayload {
   durationSeconds?: number;
 }
 
+export type AnalysisPhase =
+  | 'preparing-media'
+  | 'processing-video'
+  | 'awaiting-model'
+  | 'receiving-response';
+
+export interface AnalysisProgress {
+  phase: AnalysisPhase;
+  message?: string;
+  framesCaptured?: number;
+  totalFrames?: number;
+}
+
 export interface AnalysisResult {
   text: string;
   loading: boolean;

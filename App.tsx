@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Camera } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
-import { AppSettings } from './types';
+import { AppSettings, AnalysisProgress } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
 import { analyzeMedia, getOllamaKey, saveOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 
@@ -42,12 +42,48 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
+  const [progressLog, setProgressLog] = useState<string[]>([]);
 
   // Refs for hidden inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const maxVideoSeconds = VIDEO_UPLOAD_LIMITS.maxDurationSeconds;
   const maxVideoMegabytes = Math.floor(VIDEO_UPLOAD_LIMITS.maxFileBytes / (1024 * 1024));
+  const videoProgressPercent = useMemo(() => {
+    if (analysisProgress?.phase !== 'processing-video') return null;
+    const total = analysisProgress.totalFrames || 0;
+    if (!total) return null;
+    const current = Math.min(total, Math.max(0, analysisProgress.framesCaptured ?? 0));
+    return Math.round((current / total) * 100);
+  }, [analysisProgress]);
+
+  const latestProgressMessage = useMemo(() => {
+    if (progressLog.length > 0) {
+      return progressLog[progressLog.length - 1];
+    }
+    return analysisProgress?.message;
+  }, [progressLog, analysisProgress]);
+
+  const describeProgress = (progress: AnalysisProgress): string => {
+    switch (progress.phase) {
+      case 'preparing-media':
+        return progress.message || 'Preparing your media...';
+      case 'processing-video': {
+        if (progress.totalFrames) {
+          const current = progress.framesCaptured ?? 0;
+          return `Extracting frames ${current}/${progress.totalFrames}...`;
+        }
+        return progress.message || 'Extracting frames...';
+      }
+      case 'awaiting-model':
+        return `Sending to ${MODEL_LABELS[settings.provider]}...`;
+      case 'receiving-response':
+        return 'Composing response...';
+      default:
+        return progress.message || 'Working...';
+    }
+  };
 
   // Persistence
   useEffect(() => {
@@ -174,6 +210,8 @@ export default function App() {
     });
     setResult(null);
     setError(undefined);
+    setAnalysisProgress(null);
+    setProgressLog([]);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,6 +236,8 @@ export default function App() {
     setPreviewUrl(null);
     setResult(null);
     setError(undefined);
+    setAnalysisProgress(null);
+    setProgressLog([]);
     // Revoke URL to prevent memory leaks
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   };
@@ -207,12 +247,27 @@ export default function App() {
 
     setIsAnalyzing(true);
     setError(undefined);
+    setProgressLog([]);
+    setAnalysisProgress({ phase: 'preparing-media', message: 'Preparing upload...' });
+    setProgressLog(['Preparing your media...']);
 
     try {
-      const text = await analyzeMedia(selectedFile, settings);
+      const text = await analyzeMedia(selectedFile, settings, {
+        onProgress: (progress) => {
+          setAnalysisProgress(progress);
+          setProgressLog((log) => {
+            const next = describeProgress(progress);
+            if (!next) return log;
+            if (log[log.length - 1] === next) return log;
+            return [...log, next];
+          });
+        }
+      });
       setResult(text);
+      setAnalysisProgress(null);
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
+      setAnalysisProgress(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -402,9 +457,29 @@ export default function App() {
                 </div>
               </div>
 
+              {isAnalyzing && videoProgressPercent !== null && (
+                <div className="space-y-2">
+                  <div className="text-xs text-center text-zinc-300">
+                    {analysisProgress?.message || 'Processing video...'} ({videoProgressPercent}%)
+                  </div>
+                  <div className="h-2 rounded-full bg-zinc-900 border border-zinc-800 overflow-hidden">
+                    <div
+                      className="h-full bg-white transition-[width] duration-300"
+                      style={{ width: `${videoProgressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Analysis Result */}
               {(isAnalyzing || result || error) && (
-                <ResultPanel loading={isAnalyzing} result={result} error={error} />
+                <ResultPanel
+                  loading={isAnalyzing}
+                  result={result}
+                  error={error}
+                  progress={analysisProgress}
+                  thoughts={progressLog}
+                />
               )}
             </div>
           )}
@@ -436,6 +511,12 @@ export default function App() {
               <RefreshCw className="w-4 h-4" />
               <span>Analyze Another</span>
             </button>
+          )}
+
+          {isAnalyzing && (
+            <p className="text-center text-xs text-zinc-400 mt-3">
+              {latestProgressMessage || 'Working...'}
+            </p>
           )}
 
           <p className="text-center text-[10px] text-zinc-600 mt-3 font-mono">
