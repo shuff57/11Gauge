@@ -1,9 +1,29 @@
-import { AppSettings } from "../types";
+import { AppSettings, MediaPayload } from "../types";
 import { SYSTEM_PROMPT } from "../constants";
 
-export const analyzeWithOpenAI = async (base64Image: string, settings: AppSettings): Promise<string> => {
+export const analyzeWithOpenAI = async (payload: MediaPayload, settings: AppSettings): Promise<string> => {
   const apiKey = settings.openaiKey;
   if (!apiKey) throw new Error("OpenAI API Key is missing.");
+
+  if (!payload.frames.length) {
+    throw new Error("No visual data supplied for analysis.");
+  }
+
+  const userContent = [
+    {
+      type: "text",
+      text:
+        payload.kind === 'video'
+          ? "Analyze the following frames extracted from a short video clip. The frames are ordered chronologically."
+          : "Analyze the provided image."
+    },
+    ...payload.frames.map((frame) => ({
+      type: "image_url",
+      image_url: {
+        url: frame.dataUrl
+      }
+    }))
+  ];
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -20,14 +40,7 @@ export const analyzeWithOpenAI = async (base64Image: string, settings: AppSettin
         },
         {
           role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: {
-                url: base64Image
-              }
-            }
-          ]
+          content: userContent
         }
       ],
       max_tokens: 1000

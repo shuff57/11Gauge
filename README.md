@@ -28,6 +28,12 @@ View your app in AI Studio: https://ai.studio/apps/drive/1ARYaFdx2arW9joHVDoUfDS
 4. Run the app:
    `npm run dev`
 
+## Photo + Video uploads
+
+- Upload standard photos (JPG/PNG) or short videos (MP4/MOV/WebM) directly from your device.
+- Videos are limited to ~45 seconds and ~80MB to keep frame extraction responsive during local analysis.
+- When a video is uploaded or recorded from your camera, the app samples a handful of frames in chronological order and sends them to the selected vision model, so you can reuse the same **Analyze** flow for both media types.
+
 ## Cloudflare Pages Functions proxy
 
 - The app calls `/api/ollama/generate` and `/api/ollama/test`, which are implemented under `functions/api/ollama/` for deployment on Cloudflare Pages Functions.

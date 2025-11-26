@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
-import { AppSettings } from "../types";
+import { AppSettings, MediaPayload } from "../types";
 import { SYSTEM_PROMPT } from "../constants";
 
-export const analyzeWithGemini = async (base64Image: string, settings: AppSettings): Promise<string> => {
+export const analyzeWithGemini = async (payload: MediaPayload, settings: AppSettings): Promise<string> => {
   // Prioritize user key if provided, otherwise fallback to env
   const apiKey = settings.geminiKey || process.env.API_KEY;
   
@@ -13,22 +13,34 @@ export const analyzeWithGemini = async (base64Image: string, settings: AppSettin
   const ai = new GoogleGenAI({ apiKey });
   const model = settings.geminiModel || 'gemini-2.5-flash';
 
+  if (!payload.frames.length) {
+    throw new Error('No visual data supplied for analysis.');
+  }
+
+  const descriptivePart = payload.kind === 'video'
+    ? 'Analyze the following frames extracted from a short video clip. Consider their chronological order to explain the full scene.'
+    : 'Analyze the provided image in detail.';
+
+  const parts = [
+    { text: SYSTEM_PROMPT },
+    { text: descriptivePart },
+    ...payload.frames.map((frame) => ({
+      inlineData: {
+        data: frame.dataUrl.includes(',') ? frame.dataUrl.split(',')[1] : frame.dataUrl,
+        mimeType: frame.mimeType || 'image/jpeg'
+      }
+    }))
+  ];
+
   try {
     const response = await ai.models.generateContent({
       model: model,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: 'image/jpeg', 
-            },
-          },
-          {
-            text: SYSTEM_PROMPT,
-          },
-        ],
-      },
+      contents: [
+        {
+          role: 'user',
+          parts
+        }
+      ],
     });
 
     return response.text || "No response text generated.";

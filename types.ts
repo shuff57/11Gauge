@@ -14,6 +14,20 @@ export interface AppSettings {
   ollamaKey: string;
 }
 
+export type MediaKind = 'image' | 'video';
+
+export interface MediaFrame {
+  dataUrl: string;
+  mimeType: string;
+  timestampSeconds?: number;
+}
+
+export interface MediaPayload {
+  frames: MediaFrame[];
+  kind: MediaKind;
+  durationSeconds?: number;
+}
+
 export interface AnalysisResult {
   text: string;
   loading: boolean;

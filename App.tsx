@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn } from 'lucide-react';
+import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Camera } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
 import { AppSettings } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
-import { analyzeImage, getOllamaKey, saveOllamaKey } from './services/llm';
+import { analyzeMedia, getOllamaKey, saveOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 
 export default function App() {
   // State
@@ -35,6 +35,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -45,6 +46,8 @@ export default function App() {
   // Refs for hidden inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const maxVideoSeconds = VIDEO_UPLOAD_LIMITS.maxDurationSeconds;
+  const maxVideoMegabytes = Math.floor(VIDEO_UPLOAD_LIMITS.maxFileBytes / (1024 * 1024));
 
   // Persistence
   useEffect(() => {
@@ -152,23 +155,46 @@ export default function App() {
   }, [user]);
 
   // Handlers
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      
-      // Create preview
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      
-      // Reset previous results
-      setResult(null);
-      setError(undefined);
+  const prepareSelectedFile = (file: File) => {
+    const type = (file.type || '').toLowerCase();
+    const nextKind = type.startsWith('video/') ? 'video' : type.startsWith('image/') ? 'image' : null;
+
+    if (!nextKind) {
+      setError('Please choose an image or video file.');
+      return;
     }
+
+    const objectUrl = URL.createObjectURL(file);
+
+    setSelectedFile(file);
+    setMediaKind(nextKind);
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return objectUrl;
+    });
+    setResult(null);
+    setError(undefined);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      prepareSelectedFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      prepareSelectedFile(file);
+    }
+    e.target.value = '';
   };
 
   const handleReset = () => {
     setSelectedFile(null);
+    setMediaKind(null);
     setPreviewUrl(null);
     setResult(null);
     setError(undefined);
@@ -183,7 +209,7 @@ export default function App() {
     setError(undefined);
 
     try {
-      const text = await analyzeImage(selectedFile, settings);
+      const text = await analyzeMedia(selectedFile, settings);
       setResult(text);
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -312,7 +338,7 @@ export default function App() {
                 />
                 <h1 className="text-xl font-medium text-white mb-2">Ready to Analyze</h1>
                 <p className="text-sm text-zinc-400 max-w-xs text-center">
-                  Upload a photo or use your camera to get instant AI insights using {MODEL_LABELS[settings.provider]}.
+                  Upload a photo, drop in a short video, or open your camera to capture something new with {MODEL_LABELS[settings.provider]}.
                 </p>
               </div>
               
@@ -324,6 +350,18 @@ export default function App() {
                   <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors" />
                 </div>
               </button>
+
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-zinc-800 text-sm text-zinc-200 hover:bg-zinc-900/80 transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Use Camera (photo or video)</span>
+              </button>
+
+              <p className="text-xs text-center text-zinc-500">
+                Videos up to {maxVideoSeconds}s / ~{maxVideoMegabytes}MB supported.
+              </p>
             </div>
           )}
 
@@ -333,15 +371,30 @@ export default function App() {
               {/* Image Preview */}
               <div className="w-full flex justify-center animate-in zoom-in-95 duration-300">
                 <div className="relative group rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl max-h-[50vh] bg-black">
-                  <img 
-                    src={previewUrl!} 
-                    alt="Preview" 
-                    className="w-full h-full object-contain max-h-[50vh]"
-                  />
+                  {mediaKind === 'video' ? (
+                    <video
+                      src={previewUrl ?? undefined}
+                      controls
+                      playsInline
+                      loop={!isAnalyzing && !result}
+                      className="w-full h-full object-contain max-h-[50vh] bg-black"
+                    />
+                  ) : (
+                    <img 
+                      src={previewUrl!} 
+                      alt="Preview" 
+                      className="w-full h-full object-contain max-h-[50vh]"
+                    />
+                  )}
+                  {mediaKind && (
+                    <span className="absolute top-3 left-3 px-3 py-1 text-xs font-semibold rounded-full bg-black/70 text-white uppercase tracking-widest">
+                      {mediaKind === 'video' ? 'Video Clip' : 'Photo'}
+                    </span>
+                  )}
                   {!isAnalyzing && !result && (
                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={handleReset} className="px-4 py-2 bg-black/50 backdrop-blur text-white text-sm rounded-full border border-white/10 hover:bg-black/70">
-                          Change Image
+                          Change Media
                         </button>
                      </div>
                   )}
@@ -369,7 +422,7 @@ export default function App() {
               className="w-full h-14 bg-white hover:bg-zinc-200 text-black rounded-full font-semibold text-base transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:scale-[1.01] active:scale-[0.99]"
             >
               <Zap className="w-5 h-5 fill-black" />
-              <span>Analyze Image</span>
+              <span>{mediaKind === 'video' ? 'Analyze Video' : mediaKind === 'image' ? 'Analyze Image' : 'Analyze Media'}</span>
             </button>
           )}
           
@@ -385,7 +438,7 @@ export default function App() {
           )}
 
           <p className="text-center text-[10px] text-zinc-600 mt-3 font-mono">
-            AI can make mistakes. Check important info.
+            AI can make mistakes. Check important info. Videos ≤ {maxVideoSeconds}s / ~{maxVideoMegabytes}MB.
           </p>
         </div>
       </div>
@@ -395,16 +448,16 @@ export default function App() {
         type="file" 
         ref={fileInputRef}
         className="hidden" 
-        accept="image/*"
-        onChange={handleFileSelect}
+        accept="image/*,video/*"
+        onChange={handleFileInputChange}
       />
       <input 
         type="file" 
         ref={cameraInputRef}
         className="hidden" 
-        accept="image/*"
+        accept="image/*,video/*"
         capture="environment"
-        onChange={handleFileSelect}
+        onChange={handleCameraCapture}
       />
     </div>
   );
