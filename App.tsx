@@ -225,7 +225,7 @@ export default function App() {
         className="pointer-events-none absolute inset-0 opacity-[0.08]"
         aria-hidden="true"
         style={{
-          backgroundColor: '#09090b',
+          backgroundColor: 'rgba(255,255,255,0.05)',
           maskImage: 'url(/11gauge-logo.png)',
           WebkitMaskImage: 'url(/11gauge-logo.png)',
           maskSize: 'contain',
