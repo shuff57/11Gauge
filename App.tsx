@@ -220,7 +220,24 @@ export default function App() {
 
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-zinc-950 selection:bg-zinc-800">
+    <div className="relative flex flex-col h-[100dvh] w-full bg-zinc-950 selection:bg-zinc-800 overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.08]"
+        aria-hidden="true"
+        style={{
+          backgroundColor: '#09090b',
+          maskImage: 'url(/11gauge-logo.png)',
+          WebkitMaskImage: 'url(/11gauge-logo.png)',
+          maskSize: 'contain',
+          WebkitMaskSize: 'contain',
+          maskPosition: 'center',
+          WebkitMaskPosition: 'center',
+          maskRepeat: 'no-repeat',
+          WebkitMaskRepeat: 'no-repeat'
+        }}
+      />
+
+      <div className="relative flex flex-col h-full w-full">
       
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-900/50 shrink-0">
@@ -331,11 +348,6 @@ export default function App() {
           {!selectedFile && (
             <div className="flex-1 flex flex-col gap-4 w-full text-zinc-600">
               <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <img 
-                  src="/11gauge-logo.png" 
-                  alt="11Gauge Logo" 
-                  className="w-32 h-32 max-w-[60vw] max-h-[60vw] object-contain invert opacity-90 mb-6 rounded-[2rem]" 
-                />
                 <h1 className="text-xl font-medium text-white mb-2">Ready to Analyze</h1>
                 <p className="text-sm text-zinc-400 max-w-xs text-center">
                   Upload a photo, drop in a short video, or open your camera to capture something new with {MODEL_LABELS[settings.provider]}.
@@ -351,17 +363,6 @@ export default function App() {
                 </div>
               </button>
 
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-zinc-800 text-sm text-zinc-200 hover:bg-zinc-900/80 transition-colors"
-              >
-                <Camera className="w-4 h-4" />
-                <span>Use Camera (photo or video)</span>
-              </button>
-
-              <p className="text-xs text-center text-zinc-500">
-                Videos up to {maxVideoSeconds}s / ~{maxVideoMegabytes}MB supported.
-              </p>
             </div>
           )}
 
@@ -438,7 +439,7 @@ export default function App() {
           )}
 
           <p className="text-center text-[10px] text-zinc-600 mt-3 font-mono">
-            AI can make mistakes. Check important info. Videos ≤ {maxVideoSeconds}s / ~{maxVideoMegabytes}MB.
+            AI can make mistakes. Check important info. Photos ≤ 25MB • Videos ≤ {maxVideoSeconds}s / ~{maxVideoMegabytes}MB.
           </p>
         </div>
       </div>
@@ -459,6 +460,7 @@ export default function App() {
         capture="environment"
         onChange={handleCameraCapture}
       />
+      </div>
     </div>
   );
 }
