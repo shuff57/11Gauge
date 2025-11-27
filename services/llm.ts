@@ -287,8 +287,11 @@ const extractVideoPayload = (
 
       const frames: MediaPayload['frames'] = [];
       let index = 0;
+      let seekTimeout: number | null = null;
 
       const captureFrame = () => {
+        console.log(`[Frame Extraction] Capturing frame ${frames.length + 1}/${sampleTimes.length} at ${video.currentTime.toFixed(2)}s`);
+        
         canvas.width = video.videoWidth || 720;
         canvas.height = video.videoHeight || 720;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -307,7 +310,9 @@ const extractVideoPayload = (
         index += 1;
 
         if (index >= sampleTimes.length) {
+          console.log('[Frame Extraction] Complete - all frames captured');
           video.removeEventListener('seeked', onSeeked);
+          if (seekTimeout) clearTimeout(seekTimeout);
           cleanup();
           resolve({ frames, kind: 'video', durationSeconds: duration });
           return;
@@ -315,19 +320,38 @@ const extractVideoPayload = (
 
         requestAnimationFrame(() => {
           try {
+            console.log(`[Frame Extraction] Seeking to ${sampleTimes[index].toFixed(2)}s`);
             video.currentTime = sampleTimes[index];
+            
+            // Timeout fallback in case seek doesn't complete
+            if (seekTimeout) clearTimeout(seekTimeout);
+            seekTimeout = window.setTimeout(() => {
+              console.warn('[Frame Extraction] Seek timeout - forcing next frame');
+              captureFrame();
+            }, 3000);
           } catch (err) {
             fail('Unable to advance through the video.');
           }
         });
       };
 
-      const onSeeked = () => captureFrame();
+      const onSeeked = () => {
+        console.log('[Frame Extraction] Seeked event fired');
+        if (seekTimeout) clearTimeout(seekTimeout);
+        captureFrame();
+      };
       seekListener = onSeeked;
       video.addEventListener('seeked', onSeeked);
 
       const startCapture = () => {
         try {
+          console.log(`[Frame Extraction] Starting capture - ${frameCount} frames over ${duration.toFixed(2)}s`);
+          onProgress?.({
+            phase: 'processing-video',
+            message: 'Starting frame extraction...',
+            framesCaptured: 0,
+            totalFrames: sampleTimes.length
+          });
           video.currentTime = sampleTimes[0];
         } catch (err) {
           fail('Unable to start video capture.');

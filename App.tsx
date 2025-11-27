@@ -458,15 +458,23 @@ export default function App() {
               </div>
 
               {isAnalyzing && videoProgressPercent !== null && (
-                <div className="space-y-2">
-                  <div className="text-xs text-center text-zinc-300">
-                    {analysisProgress?.message || 'Processing video...'} ({videoProgressPercent}%)
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-zinc-400">Extracting frames from video</span>
+                    <span className="text-zinc-300 font-mono">
+                      {analysisProgress?.framesCaptured || 0}/{analysisProgress?.totalFrames || 0}
+                    </span>
                   </div>
-                  <div className="h-2 rounded-full bg-zinc-900 border border-zinc-800 overflow-hidden">
+                  <div className="h-3 rounded-full bg-zinc-900 border border-zinc-800 overflow-hidden shadow-inner">
                     <div
-                      className="h-full bg-white transition-[width] duration-300"
+                      className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500 ease-out relative"
                       style={{ width: `${videoProgressPercent}%` }}
-                    />
+                    >
+                      <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="text-center text-xs text-zinc-500 font-mono">
+                    {videoProgressPercent}% complete
                   </div>
                 </div>
               )}
