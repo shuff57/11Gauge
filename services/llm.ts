@@ -237,14 +237,19 @@ const extractVideoPayload = (
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const video = document.createElement('video');
-    video.preload = 'metadata';
+    video.preload = 'auto';
     video.src = objectUrl;
     video.muted = true;
     video.playsInline = true;
+    video.crossOrigin = 'anonymous';
 
     let seekListener: (() => void) | null = null;
+    let loadedDataListener: (() => void) | null = null;
+    let isProcessing = false;
 
     const cleanup = () => {
+      if (seekListener) video.removeEventListener('seeked', seekListener);
+      if (loadedDataListener) video.removeEventListener('loadeddata', loadedDataListener);
       URL.revokeObjectURL(objectUrl);
       video.pause();
       video.removeAttribute('src');
@@ -254,14 +259,16 @@ const extractVideoPayload = (
     };
 
     const fail = (message: string) => {
-      if (seekListener) {
-        video.removeEventListener('seeked', seekListener);
-      }
+      if (isProcessing) return; // Prevent double failures
+      isProcessing = true;
       cleanup();
       reject(new Error(message));
     };
 
-    video.onerror = () => fail('Unable to read the selected video.');
+    video.onerror = (e) => {
+      console.error('[Frame Extraction] Video error:', e);
+      fail('Unable to read the selected video.');
+    };
 
     video.onloadedmetadata = () => {
       const duration = video.duration;
@@ -288,80 +295,151 @@ const extractVideoPayload = (
       const frames: MediaPayload['frames'] = [];
       let index = 0;
       let seekTimeout: number | null = null;
+      let isSeeking = false;
 
       const captureFrame = () => {
-        console.log(`[Frame Extraction] Capturing frame ${frames.length + 1}/${sampleTimes.length} at ${video.currentTime.toFixed(2)}s`);
+        if (isProcessing) return; // Already completed or failed
         
-        canvas.width = video.videoWidth || 720;
-        canvas.height = video.videoHeight || 720;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        frames.push({
-          dataUrl,
-          mimeType: 'image/jpeg',
-          timestampSeconds: Number(sampleTimes[index].toFixed(2))
-        });
-        onProgress?.({
-          phase: 'processing-video',
-          message: `Captured frame ${frames.length}/${sampleTimes.length}`,
-          framesCaptured: frames.length,
-          totalFrames: sampleTimes.length
-        });
-        index += 1;
-
-        if (index >= sampleTimes.length) {
-          console.log('[Frame Extraction] Complete - all frames captured');
-          video.removeEventListener('seeked', onSeeked);
-          if (seekTimeout) clearTimeout(seekTimeout);
-          cleanup();
-          resolve({ frames, kind: 'video', durationSeconds: duration });
+        console.log(`[Frame Extraction] Capturing frame ${frames.length + 1}/${sampleTimes.length} at ${video.currentTime.toFixed(2)}s`);
+        console.log(`[Frame Extraction] Video state: readyState=${video.readyState}, paused=${video.paused}, videoWidth=${video.videoWidth}`);
+        
+        // Wait for video to be ready
+        if (video.readyState < 2 || video.videoWidth === 0) {
+          console.warn('[Frame Extraction] Video not ready, waiting...');
+          setTimeout(() => captureFrame(), 100);
           return;
         }
 
-        requestAnimationFrame(() => {
-          try {
-            console.log(`[Frame Extraction] Seeking to ${sampleTimes[index].toFixed(2)}s`);
-            video.currentTime = sampleTimes[index];
-            
-            // Timeout fallback in case seek doesn't complete
+        try {
+          canvas.width = video.videoWidth || 720;
+          canvas.height = video.videoHeight || 720;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          frames.push({
+            dataUrl,
+            mimeType: 'image/jpeg',
+            timestampSeconds: Number(sampleTimes[index].toFixed(2))
+          });
+          
+          onProgress?.({
+            phase: 'processing-video',
+            message: `Captured frame ${frames.length}/${sampleTimes.length}`,
+            framesCaptured: frames.length,
+            totalFrames: sampleTimes.length
+          });
+          
+          index += 1;
+          isSeeking = false;
+
+          if (index >= sampleTimes.length) {
+            console.log('[Frame Extraction] Complete - all frames captured');
+            isProcessing = true;
             if (seekTimeout) clearTimeout(seekTimeout);
-            seekTimeout = window.setTimeout(() => {
-              console.warn('[Frame Extraction] Seek timeout - forcing next frame');
-              captureFrame();
-            }, 3000);
-          } catch (err) {
-            fail('Unable to advance through the video.');
+            cleanup();
+            resolve({ frames, kind: 'video', durationSeconds: duration });
+            return;
           }
-        });
+
+          // Move to next frame
+          seekToNextFrame();
+        } catch (err) {
+          console.error('[Frame Extraction] Capture error:', err);
+          fail(`Failed to capture frame: ${err}`);
+        }
+      };
+
+      const seekToNextFrame = () => {
+        if (isSeeking || isProcessing) return;
+        
+        isSeeking = true;
+        const targetTime = sampleTimes[index];
+        
+        console.log(`[Frame Extraction] Seeking to ${targetTime.toFixed(2)}s (frame ${index + 1}/${sampleTimes.length})`);
+        
+        if (seekTimeout) clearTimeout(seekTimeout);
+        
+        // Set timeout to force capture if seek hangs
+        seekTimeout = window.setTimeout(() => {
+          if (!isProcessing && isSeeking) {
+            console.warn('[Frame Extraction] Seek timeout - attempting recovery');
+            isSeeking = false;
+            // Try to capture at current position
+            captureFrame();
+          }
+        }, 5000);
+        
+        try {
+          video.currentTime = targetTime;
+        } catch (err) {
+          console.error('[Frame Extraction] Seek error:', err);
+          isSeeking = false;
+          fail('Unable to advance through the video.');
+        }
       };
 
       const onSeeked = () => {
-        console.log('[Frame Extraction] Seeked event fired');
+        console.log('[Frame Extraction] Seeked event fired, currentTime=' + video.currentTime.toFixed(2));
         if (seekTimeout) clearTimeout(seekTimeout);
-        captureFrame();
+        if (!isSeeking || isProcessing) return;
+        
+        // Small delay to ensure frame is rendered on mobile
+        setTimeout(() => captureFrame(), 50);
       };
+      
       seekListener = onSeeked;
       video.addEventListener('seeked', onSeeked);
 
       const startCapture = () => {
-        try {
-          console.log(`[Frame Extraction] Starting capture - ${frameCount} frames over ${duration.toFixed(2)}s`);
-          onProgress?.({
-            phase: 'processing-video',
-            message: 'Starting frame extraction...',
-            framesCaptured: 0,
-            totalFrames: sampleTimes.length
-          });
-          video.currentTime = sampleTimes[0];
-        } catch (err) {
-          fail('Unable to start video capture.');
+        console.log(`[Frame Extraction] Starting capture - ${frameCount} frames over ${duration.toFixed(2)}s`);
+        console.log(`[Frame Extraction] Sample times:`, sampleTimes);
+        console.log(`[Frame Extraction] Video readyState: ${video.readyState}`);
+        
+        onProgress?.({
+          phase: 'processing-video',
+          message: 'Starting frame extraction...',
+          framesCaptured: 0,
+          totalFrames: sampleTimes.length
+        });
+        
+        // Give video time to fully load on mobile
+        setTimeout(() => {
+          try {
+            seekToNextFrame();
+          } catch (err) {
+            console.error('[Frame Extraction] Start error:', err);
+            fail('Unable to start video capture.');
+          }
+        }, 100);
+      };
+
+      // Set overall timeout for entire extraction process
+      const overallTimeout = setTimeout(() => {
+        if (!isProcessing) {
+          console.error('[Frame Extraction] Overall timeout exceeded');
+          fail('Video processing took too long. Try a shorter video.');
+        }
+      }, 30000); // 30 second max for entire process
+
+      const loadedHandler = () => {
+        console.log('[Frame Extraction] Video loaded, readyState:', video.readyState);
+        if (video.readyState >= 2) {
+          startCapture();
         }
       };
 
       if (video.readyState >= 2) {
         startCapture();
       } else {
-        video.addEventListener('loadeddata', startCapture, { once: true });
+        loadedDataListener = loadedHandler;
+        video.addEventListener('loadeddata', loadedHandler, { once: true });
+        
+        // Fallback if loadeddata never fires
+        setTimeout(() => {
+          if (!isProcessing && video.readyState >= 2) {
+            console.warn('[Frame Extraction] loadeddata timeout, starting anyway');
+            startCapture();
+          }
+        }, 2000);
       }
     };
   });
