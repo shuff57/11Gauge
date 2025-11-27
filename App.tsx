@@ -1,4 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+// Debug panel utility
+const useDebugPanel = () => {
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const addDebugLog = (msg: string) => {
+    setDebugLogs(logs => [...logs.slice(-99), `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  };
+  return { debugLogs, addDebugLog };
+};
 import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Camera } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
@@ -8,6 +16,7 @@ import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
 import { analyzeMedia, getOllamaKey, saveOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 
 export default function App() {
+  const { debugLogs, addDebugLog } = useDebugPanel();
   // State
   const hydrateSettings = (raw: AppSettings | null): AppSettings => {
     const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
@@ -250,11 +259,13 @@ export default function App() {
     setProgressLog([]);
     setAnalysisProgress({ phase: 'preparing-media', message: 'Preparing upload...' });
     setProgressLog(['Preparing your media...']);
+    addDebugLog('Starting analysis...');
 
     try {
       const text = await analyzeMedia(selectedFile, settings, {
         onProgress: (progress) => {
           setAnalysisProgress(progress);
+          addDebugLog(`[progress] ${progress.phase}: ${progress.message || ''}`);
           setProgressLog((log) => {
             const next = describeProgress(progress);
             if (!next) return log;
@@ -265,22 +276,62 @@ export default function App() {
       });
       setResult(text);
       setAnalysisProgress(null);
+      addDebugLog('Analysis complete.');
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
       setAnalysisProgress(null);
+      addDebugLog(`[error] ${err.message || err}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
 
+  // Debug panel toggle
+  const [showDebug, setShowDebug] = useState(false);
+
   return (
     <div className="relative flex flex-col h-[100dvh] w-full bg-zinc-950 selection:bg-zinc-800 overflow-hidden">
+            {/* Debug Panel */}
+            <button
+              style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 10000 }}
+              className="bg-zinc-900 text-xs text-zinc-200 px-3 py-1 rounded shadow hover:bg-zinc-800 border border-zinc-700"
+              onClick={() => setShowDebug(d => !d)}
+            >
+              {showDebug ? 'Hide Debug' : 'Show Debug'}
+            </button>
+            {showDebug && (
+              <div
+                style={{
+                  position: 'fixed',
+                  bottom: 56,
+                  right: 16,
+                  width: '90vw',
+                  maxWidth: 400,
+                  maxHeight: '40vh',
+                  overflowY: 'auto',
+                  zIndex: 10000,
+                  background: 'rgba(24,24,27,0.98)',
+                  borderRadius: 12,
+                  boxShadow: '0 2px 16px rgba(0,0,0,0.25)',
+                  border: '1px solid #27272a',
+                  padding: 12,
+                  fontSize: 12,
+                  color: '#e4e4e7',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                }}
+              >
+                <div style={{ marginBottom: 8, fontWeight: 600 }}>Debug Log</div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                  {debugLogs.length === 0 ? <div>No logs yet.</div> : debugLogs.map((l, i) => <div key={i}>{l}</div>)}
+                </div>
+              </div>
+            )}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.08]"
+        className="pointer-events-none absolute inset-0"
         aria-hidden="true"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.05)',
+          backgroundColor: '#18181b',
           maskImage: 'url(/11gauge-logo.png)',
           WebkitMaskImage: 'url(/11gauge-logo.png)',
           maskSize: 'contain',
