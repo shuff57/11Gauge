@@ -295,13 +295,13 @@ export default function App() {
       
       {/* Background Logo */}
       <div 
-        className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.15]"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.2]"
         aria-hidden="true"
       >
         <img 
           src="/11gauge-logo.svg" 
           alt="" 
-          className="w-[85%] h-[85%] object-contain opacity-50 grayscale invert"
+          className="w-[85%] h-[85%] object-contain grayscale invert"
         />
       </div>
 
