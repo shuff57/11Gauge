@@ -292,56 +292,18 @@ export default function App() {
 
   return (
     <div className="relative flex flex-col h-[100dvh] w-full bg-zinc-950 selection:bg-zinc-800 overflow-hidden">
-            {/* Debug Panel */}
-            <button
-              style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 10000 }}
-              className="bg-zinc-900 text-xs text-zinc-200 px-3 py-1 rounded shadow hover:bg-zinc-800 border border-zinc-700"
-              onClick={() => setShowDebug(d => !d)}
-            >
-              {showDebug ? 'Hide Debug' : 'Show Debug'}
-            </button>
-            {showDebug && (
-              <div
-                style={{
-                  position: 'fixed',
-                  bottom: 56,
-                  right: 16,
-                  width: '90vw',
-                  maxWidth: 400,
-                  maxHeight: '40vh',
-                  overflowY: 'auto',
-                  zIndex: 10000,
-                  background: 'rgba(24,24,27,0.98)',
-                  borderRadius: 12,
-                  boxShadow: '0 2px 16px rgba(0,0,0,0.25)',
-                  border: '1px solid #27272a',
-                  padding: 12,
-                  fontSize: 12,
-                  color: '#e4e4e7',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                }}
-              >
-                <div style={{ marginBottom: 8, fontWeight: 600 }}>Debug Log</div>
-                <div style={{ whiteSpace: 'pre-wrap' }}>
-                  {debugLogs.length === 0 ? <div>No logs yet.</div> : debugLogs.map((l, i) => <div key={i}>{l}</div>)}
-                </div>
-              </div>
-            )}
-      <div
-        className="pointer-events-none absolute inset-0"
+      
+      {/* Background Logo */}
+      <div 
+        className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.15]"
         aria-hidden="true"
-        style={{
-          backgroundColor: '#18181b',
-          maskImage: 'url(/11gauge-logo.png)',
-          WebkitMaskImage: 'url(/11gauge-logo.png)',
-          maskSize: 'contain',
-          WebkitMaskSize: 'contain',
-          maskPosition: 'center',
-          WebkitMaskPosition: 'center',
-          maskRepeat: 'no-repeat',
-          WebkitMaskRepeat: 'no-repeat'
-        }}
-      />
+      >
+        <img 
+          src="/11gauge-logo.svg" 
+          alt="" 
+          className="w-[85%] h-[85%] object-contain opacity-50 grayscale invert"
+        />
+      </div>
 
       <div className="relative flex flex-col h-full w-full">
       
@@ -448,6 +410,17 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+        <style>{`
+          @keyframes slow-shake {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+            100% { transform: rotate(0deg); }
+          }
+          .group:hover .icon-shake {
+            animation: slow-shake 2s ease-in-out infinite;
+          }
+        `}</style>
         <div className="mx-[5vw] min-h-full flex flex-col p-2 sm:p-6">
           
           {/* Empty State / Logo with overlay inputs */}
@@ -462,10 +435,10 @@ export default function App() {
               
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex-1 flex flex-col items-center justify-center gap-6 hover:bg-zinc-900/80 transition-all group rounded-3xl p-2 sm:p-6 bg-zinc-900/40 border border-zinc-800"
+                className="flex-1 flex flex-col items-center justify-center gap-6 transition-all group rounded-3xl p-2 sm:p-6"
               >
                 <div className="w-48 h-48 max-w-[70vw] max-h-[70vw] p-6 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center aspect-square">
-                  <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors" />
+                  <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors icon-shake" />
                 </div>
               </button>
 
