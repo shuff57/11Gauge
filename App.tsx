@@ -50,6 +50,8 @@ export default function App() {
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
+  const providerMenuRef = useRef<HTMLDivElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -116,15 +118,22 @@ export default function App() {
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      if (!userMenuRef.current) return;
       if (!(e.target instanceof Node)) return;
-      if (!userMenuRef.current.contains(e.target)) {
+      
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setIsUserMenuOpen(false);
+      }
+      
+      if (providerMenuRef.current && !providerMenuRef.current.contains(e.target)) {
+        setIsProviderMenuOpen(false);
       }
     }
 
     function onEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') setIsUserMenuOpen(false);
+      if (e.key === 'Escape') {
+        setIsUserMenuOpen(false);
+        setIsProviderMenuOpen(false);
+      }
     }
 
     document.addEventListener('mousedown', onDocClick);
@@ -333,9 +342,35 @@ export default function App() {
         </button>
 
         <div className="flex items-center gap-3 relative">
-           <span className="hidden sm:block text-xs font-mono text-zinc-600 uppercase tracking-widest">
-            {MODEL_LABELS[settings.provider]}
-          </span>
+           <div className="relative hidden sm:block" ref={providerMenuRef}>
+            <button
+              onClick={() => setIsProviderMenuOpen(!isProviderMenuOpen)}
+              className="text-xs font-mono text-zinc-600 uppercase tracking-widest hover:text-zinc-400 transition-colors"
+            >
+              {MODEL_LABELS[settings.provider]}
+            </button>
+            
+            {isProviderMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg z-50 py-1">
+                {Object.entries(MODEL_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setSettings(s => ({ ...s, provider: key as any }));
+                      setIsProviderMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs font-mono uppercase tracking-wider transition-colors ${
+                      settings.provider === key 
+                        ? 'text-white bg-zinc-800' 
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             className={`p-2 rounded-full transition-colors ${isSettingsOpen ? 'text-white bg-zinc-900' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
