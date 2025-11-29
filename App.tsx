@@ -58,6 +58,14 @@ export default function App() {
   const [error, setError] = useState<string | undefined>();
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [progressLog, setProgressLog] = useState<string[]>([]);
+  const [hasUsedDemo, setHasUsedDemo] = useState(false);
+
+  // Check demo usage on mount
+  useEffect(() => {
+    const local = localStorage.getItem('has_used_demo') === 'true';
+    const session = sessionStorage.getItem('has_used_demo') === 'true';
+    setHasUsedDemo(local || session);
+  }, []);
 
   // Refs for hidden inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -270,18 +278,15 @@ export default function App() {
   const handleAnalyze = async () => {
     if (!selectedFile) return;
 
-    // Check for demo usage limit if signed out and no key provided
+    // Check for demo usage limit if signed out
     if (!user) {
-      let isUsingDemoKey = false;
-      if (settings.provider === ModelProvider.OLLAMA && !settings.ollamaKey) isUsingDemoKey = true;
-      if (settings.provider === ModelProvider.GEMINI && !settings.geminiKey) isUsingDemoKey = true;
+      const local = localStorage.getItem('has_used_demo');
+      const session = sessionStorage.getItem('has_used_demo');
       
-      if (isUsingDemoKey) {
-        const hasUsedDemo = localStorage.getItem('has_used_demo');
-        if (hasUsedDemo) {
-          setError("Demo limit reached. Please sign in or add your own API key in Manage Keys.");
-          return;
-        }
+      if (local || session) {
+        setError("Demo limit reached. Please sign in or add your own API key in Manage Keys.");
+        setHasUsedDemo(true);
+        return;
       }
     }
 
@@ -319,13 +324,9 @@ export default function App() {
 
       // Mark demo as used if applicable
       if (!user) {
-        let isUsingDemoKey = false;
-        if (settings.provider === ModelProvider.OLLAMA && !settings.ollamaKey) isUsingDemoKey = true;
-        if (settings.provider === ModelProvider.GEMINI && !settings.geminiKey) isUsingDemoKey = true;
-        
-        if (isUsingDemoKey) {
-          localStorage.setItem('has_used_demo', 'true');
-        }
+        localStorage.setItem('has_used_demo', 'true');
+        sessionStorage.setItem('has_used_demo', 'true');
+        setHasUsedDemo(true);
       }
 
     } catch (err: any) {
@@ -537,14 +538,34 @@ export default function App() {
                 </p>
               </div>
               
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 flex flex-col items-center justify-center gap-6 transition-all group rounded-3xl p-2 sm:p-6"
-              >
-                <div className="w-48 h-48 max-w-[70vw] max-h-[70vw] p-6 rounded-full bg-transparent border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center aspect-square">
-                  <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors icon-shake" />
+              {!user && hasUsedDemo ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-6">
+                  <div className="w-full max-w-xs p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center backdrop-blur-sm">
+                    <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-4">
+                      <Zap className="w-6 h-6 text-zinc-500" />
+                    </div>
+                    <h3 className="text-white font-medium mb-2">Demo Limit Reached</h3>
+                    <p className="text-sm text-zinc-400 mb-6">
+                      You've used your free demo scan. Sign in to continue analyzing unlimited media.
+                    </p>
+                    <button 
+                      onClick={() => setIsAuthOpen(true)} 
+                      className="w-full py-2.5 bg-white text-black rounded-xl font-medium text-sm hover:bg-zinc-200 transition-colors"
+                    >
+                      Sign In to Continue
+                    </button>
+                  </div>
                 </div>
-              </button>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center justify-center gap-6 transition-all group rounded-3xl p-2 sm:p-6"
+                >
+                  <div className="w-48 h-48 max-w-[70vw] max-h-[70vw] p-6 rounded-full bg-transparent border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center aspect-square">
+                    <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors icon-shake" />
+                  </div>
+                </button>
+              )}
 
             </div>
           )}
