@@ -9,6 +9,7 @@ const useDebugPanel = () => {
 };
 import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Camera } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
+import { KeyManagerModal } from './components/KeyManagerModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
 import { AppSettings, AnalysisProgress } from './types';
@@ -38,6 +39,8 @@ export default function App() {
   });
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
+  const [keyUpdateTrigger, setKeyUpdateTrigger] = useState(0);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<{ email: string } | null>(() => {
     const saved = localStorage.getItem('user');
@@ -93,6 +96,10 @@ export default function App() {
         return progress.message || 'Working...';
     }
   };
+
+  const handleKeysUpdated = React.useCallback(() => {
+    setKeyUpdateTrigger(prev => prev + 1);
+  }, []);
 
   // Persistence
   useEffect(() => {
@@ -358,7 +365,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false);
-                      setIsSettingsOpen(true);
+                      setIsKeyManagerOpen(true);
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
                   >
@@ -403,7 +410,20 @@ export default function App() {
             settings={settings}
             onUpdate={setSettings}
             user={user}
+            onOpenKeyManager={() => setIsKeyManagerOpen(true)}
+            keyUpdateTrigger={keyUpdateTrigger}
           />
+
+          {user && (
+            <KeyManagerModal
+              isOpen={isKeyManagerOpen}
+              onClose={() => setIsKeyManagerOpen(false)}
+              user={user}
+              settings={settings}
+              onUpdate={setSettings}
+              onKeysUpdated={handleKeysUpdated}
+            />
+          )}
 
         </div>
       </header>

@@ -28,7 +28,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const MODEL_LABELS = {
-  [ModelProvider.GEMINI]: 'Gemini (Google)',
+  [ModelProvider.GEMINI]: 'Google (Gemini)',
   [ModelProvider.OPENAI]: 'OpenAI (ChatGPT)',
   [ModelProvider.OLLAMA]: 'Ollama (OpenSource)',
 };
