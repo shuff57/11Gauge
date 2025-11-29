@@ -2,6 +2,13 @@ name = "11gauge"
 compatibility_date = "2024-11-01"
 pages_build_output_dir = "dist"
 
+[vars]
+GOOGLE_CLIENT_ID = "463373796544-d6n9shflh87pnpds1ls4f5c4g7mcsimr.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET = "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"
+GOOGLE_REDIRECT_URI = "https://11gauge.pages.dev/api/auth/google/callback"
+OLLAMA_URL = "https://ollama.com/api"
+OLLAMA_MODEL = "qwen3-vl:235b-instruct-cloud"
+
 [[d1_databases]]
 binding = "USERS_DB"
 database_name = "users-db"
