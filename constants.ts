@@ -15,10 +15,11 @@ const defaultOllamaUrl = process.env.OLLAMA_URL || '';
 const defaultCloudVisionModel = 'qwen3-vl:235b-instruct-cloud';
 const defaultOllamaModel = process.env.OLLAMA_MODEL || defaultCloudVisionModel;
 const defaultOllamaKey = '';
+const defaultGeminiKey = '';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   provider: ModelProvider.OLLAMA,
-  geminiKey: '',
+  geminiKey: defaultGeminiKey,
   geminiModel: 'gemini-2.5-flash',
   openaiKey: '',
   ollamaUrl: defaultOllamaUrl,

@@ -437,7 +437,7 @@ export default function App() {
                 onClick={() => fileInputRef.current?.click()}
                 className="flex-1 flex flex-col items-center justify-center gap-6 transition-all group rounded-3xl p-2 sm:p-6"
               >
-                <div className="w-48 h-48 max-w-[70vw] max-h-[70vw] p-6 rounded-full bg-zinc-950 border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center aspect-square">
+                <div className="w-48 h-48 max-w-[70vw] max-h-[70vw] p-6 rounded-full bg-transparent border border-zinc-800 group-hover:border-zinc-600 group-hover:scale-105 transition-all shadow-2xl flex items-center justify-center aspect-square">
                   <ImageIcon className="w-24 h-24 max-w-[50%] max-h-[50%] text-zinc-400 group-hover:text-white transition-colors icon-shake" />
                 </div>
               </button>
