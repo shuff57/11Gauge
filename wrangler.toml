@@ -2,13 +2,7 @@ name = "11gauge"
 compatibility_date = "2024-11-01"
 pages_build_output_dir = "dist"
 
-[vars]
-# Secrets should be added via Cloudflare Dashboard > Settings > Environment Variables
-# GOOGLE_CLIENT_ID = "..."
-# GOOGLE_CLIENT_SECRET = "..."
-GOOGLE_REDIRECT_URI = "https://11gauge.pages.dev/api/auth/google/callback"
-OLLAMA_URL = "https://ollama.com/api"
-OLLAMA_MODEL = "qwen3-vl:235b-instruct-cloud"
+
 
 [[d1_databases]]
 binding = "USERS_DB"
