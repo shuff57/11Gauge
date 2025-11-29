@@ -251,7 +251,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
               >
                 {Object.entries(MODEL_LABELS)
-                  .filter(([key]) => user || key !== ModelProvider.OPENAI)
+                  .filter(([key]) => user || key === ModelProvider.OLLAMA)
                   .map(([key, label]) => (
                     <option key={key} value={key}>{label}</option>
                   ))}
@@ -266,7 +266,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {settings.provider === ModelProvider.GEMINI && (
               <>
-                {user ? (
+                {user && (
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Use Saved Key</label>
                     <select
@@ -284,17 +284,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {savedKeysByProvider.gemini.length === 0 && (
                       <p className="text-[10px] text-zinc-500 pt-1">No saved keys found.</p>
                     )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="text-sm text-zinc-300">API Key</label>
-                    <input
-                      type="password"
-                      value={settings.geminiKey}
-                      onChange={(e) => handleChange('geminiKey', e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                      placeholder="Enter your Gemini API key"
-                    />
                   </div>
                 )}
                  <div className="space-y-2">
@@ -314,7 +303,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {settings.provider === ModelProvider.OPENAI && (
               <div className="space-y-2">
-                {user ? (
+                {user && (
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Use Saved Key</label>
                     <select
@@ -333,24 +322,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <p className="text-[10px] text-zinc-500 pt-1">No saved keys found.</p>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <label className="text-sm text-zinc-300">OpenAI API Key</label>
-                    <input
-                      type="password"
-                      value={settings.openaiKey}
-                      onChange={(e) => handleChange('openaiKey', e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                      placeholder="sk-..."
-                    />
-                  </>
                 )}
               </div>
             )}
 
             {isOllama && (
               <>
-                {user ? (
+                {user && (
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Use Saved Key</label>
                     <select
@@ -369,19 +347,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <p className="text-[10px] text-zinc-500 pt-1">No saved keys found.</p>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <label className="text-sm text-zinc-300">API Key</label>
-                      <input
-                        type="password"
-                        value={settings.ollamaKey || ''}
-                        onChange={(e) => handleChange('ollamaKey', e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                        placeholder="Bearer token (optional)"
-                      />
-                    </div>
-                  </>
                 )}
               </>
             )}

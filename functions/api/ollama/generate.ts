@@ -35,8 +35,7 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     const baseUrl = resolveBaseUrl(payload?.url, env.OLLAMA_URL);
     const apiKey = await resolveApiKey({
       provided: payload?.key,
-      fallback: env.OLLAMA_API_KEY,
-      store: env.KEY_STORE
+      fallback: env.OLLAMA_API_KEY
     });
     const model = resolveModel(payload?.model, env.OLLAMA_MODEL);
     const prompt = payload?.prompt;

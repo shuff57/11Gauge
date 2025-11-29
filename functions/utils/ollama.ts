@@ -42,11 +42,6 @@ const resolveApiKey = async (options: ApiKeyOptions): Promise<string | undefined
   const fallback = (options.fallback || "").trim();
   if (fallback) return fallback;
 
-  if (options.store) {
-    const stored = (await options.store.get(OLLAMA_KEY_STORAGE_KEY))?.trim();
-    if (stored) return stored;
-  }
-
   return undefined;
 };
 

@@ -12,7 +12,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { KeyManagerModal } from './components/KeyManagerModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
-import { AppSettings, AnalysisProgress } from './types';
+import { AppSettings, AnalysisProgress, ModelProvider } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
 import { analyzeMedia, getOllamaKey, saveOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 
@@ -270,6 +270,21 @@ export default function App() {
   const handleAnalyze = async () => {
     if (!selectedFile) return;
 
+    // Check for demo usage limit if signed out and no key provided
+    if (!user) {
+      let isUsingDemoKey = false;
+      if (settings.provider === ModelProvider.OLLAMA && !settings.ollamaKey) isUsingDemoKey = true;
+      if (settings.provider === ModelProvider.GEMINI && !settings.geminiKey) isUsingDemoKey = true;
+      
+      if (isUsingDemoKey) {
+        const hasUsedDemo = localStorage.getItem('has_used_demo');
+        if (hasUsedDemo) {
+          setError("Demo limit reached. Please sign in or add your own API key in Manage Keys.");
+          return;
+        }
+      }
+    }
+
     setIsAnalyzing(true);
     setError(undefined);
     setProgressLog([]);
@@ -278,7 +293,15 @@ export default function App() {
     addDebugLog('Starting analysis...');
 
     try {
-      const text = await analyzeMedia(selectedFile, settings, {
+      // If signed out, force empty key to ensure backend uses demo key
+      // AND force provider to Ollama to prevent using other providers via local storage hacks
+      const effectiveSettings = user ? settings : { 
+        ...settings, 
+        provider: ModelProvider.OLLAMA,
+        ollamaKey: '' 
+      };
+      
+      const text = await analyzeMedia(selectedFile, effectiveSettings, {
         onProgress: (progress) => {
           setAnalysisProgress(progress);
           addDebugLog(`[progress] ${progress.phase}: ${progress.message || ''}`);
@@ -293,6 +316,18 @@ export default function App() {
       setResult(text);
       setAnalysisProgress(null);
       addDebugLog('Analysis complete.');
+
+      // Mark demo as used if applicable
+      if (!user) {
+        let isUsingDemoKey = false;
+        if (settings.provider === ModelProvider.OLLAMA && !settings.ollamaKey) isUsingDemoKey = true;
+        if (settings.provider === ModelProvider.GEMINI && !settings.geminiKey) isUsingDemoKey = true;
+        
+        if (isUsingDemoKey) {
+          localStorage.setItem('has_used_demo', 'true');
+        }
+      }
+
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
       setAnalysisProgress(null);
@@ -352,22 +387,29 @@ export default function App() {
             
             {isProviderMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg z-50 py-1">
-                {Object.entries(MODEL_LABELS).map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      setSettings(s => ({ ...s, provider: key as any }));
-                      setIsProviderMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs font-mono uppercase tracking-wider transition-colors ${
-                      settings.provider === key 
-                        ? 'text-white bg-zinc-800' 
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {Object.entries(MODEL_LABELS).map(([key, label]) => {
+                  const isDisabled = !user && key !== 'ollama';
+                  return (
+                    <button
+                      key={key}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        if (isDisabled) return;
+                        setSettings(s => ({ ...s, provider: key as any }));
+                        setIsProviderMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs font-mono uppercase tracking-wider transition-colors ${
+                        settings.provider === key 
+                          ? 'text-white bg-zinc-800' 
+                          : isDisabled
+                            ? 'text-zinc-600 cursor-not-allowed'
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -410,6 +452,13 @@ export default function App() {
                     onClick={async () => {
                       // Optional server-side signout can go here
                       setUser(null);
+                      setSettings(prev => ({
+                        ...prev,
+                        provider: ModelProvider.OLLAMA,
+                        geminiKey: '',
+                        openaiKey: '',
+                        ollamaKey: ''
+                      }));
                       setIsUserMenuOpen(false);
                       setIsAuthOpen(false);
                       try {
