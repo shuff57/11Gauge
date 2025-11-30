@@ -8,7 +8,12 @@ export const VIDEO_UPLOAD_LIMITS = {
   maxFrames: 6
 } as const;
 
-const VIDEO_FRAME_SPACING_SECONDS = 2;
+const TARGET_FRAME_SPACING_SECONDS = 2;
+const MIN_SAMPLE_INTERVAL_SECONDS = 0.4;
+const MAX_SAMPLE_INTERVAL_SECONDS = 3.5;
+const MOTION_SAMPLE_WIDTH = 96;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 type ProgressCallback = (progress: AnalysisProgress) => void;
 interface AnalyzeMediaOptions {
@@ -284,12 +289,44 @@ const extractVideoPayload = (
         return fail(`Videos must be ${VIDEO_UPLOAD_LIMITS.maxDurationSeconds} seconds or shorter.`);
       }
 
+      const targetSpacing = duration < 10 ? 0.8 : duration > 30 ? 3 : TARGET_FRAME_SPACING_SECONDS;
+      const isDurationAdjusted = targetSpacing !== TARGET_FRAME_SPACING_SECONDS;
+      let isMotionAdjusted = false;
+
       const safeEnd = Math.max(duration - 0.08, 0);
       const frameCount = Math.min(
         VIDEO_UPLOAD_LIMITS.maxFrames,
-        Math.max(1, Math.ceil(duration / VIDEO_FRAME_SPACING_SECONDS))
+        Math.max(1, Math.ceil(duration / targetSpacing))
       );
-      const sampleTimes = buildSampleTimeline(safeEnd, frameCount);
+
+      const frameTargets: number[] = [0];
+      const extendTimeline = (motionScore?: number | null) => {
+        if (frameTargets.length >= frameCount) return;
+        const remainingSlots = frameCount - frameTargets.length;
+        const lastTime = frameTargets[frameTargets.length - 1];
+        const remainingDuration = Math.max(0, safeEnd - lastTime);
+        const baseSpacing = remainingSlots > 0 ? remainingDuration / remainingSlots : targetSpacing;
+        const baseInterval = Math.max(MIN_SAMPLE_INTERVAL_SECONDS, baseSpacing);
+        const motionInterval = typeof motionScore === 'number'
+          ? Math.max(
+              MIN_SAMPLE_INTERVAL_SECONDS,
+              MAX_SAMPLE_INTERVAL_SECONDS - motionScore * (MAX_SAMPLE_INTERVAL_SECONDS - MIN_SAMPLE_INTERVAL_SECONDS)
+            )
+          : null;
+        
+        if (motionInterval && motionInterval < baseInterval - 0.05) {
+          isMotionAdjusted = true;
+        }
+
+        const chosenInterval = motionInterval ? Math.min(baseInterval, motionInterval) : baseInterval;
+        const boundedInterval = Math.max(MIN_SAMPLE_INTERVAL_SECONDS, chosenInterval);
+        const nextTime = Math.min(safeEnd, lastTime + boundedInterval);
+        if (nextTime - lastTime < 0.05 && safeEnd > lastTime) {
+          frameTargets.push(Number(Math.min(safeEnd, lastTime + MIN_SAMPLE_INTERVAL_SECONDS).toFixed(3)));
+        } else {
+          frameTargets.push(Number(nextTime.toFixed(3)));
+        }
+      };
 
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -300,13 +337,15 @@ const extractVideoPayload = (
       let seekTimeout: number | null = null;
       let isSeeking = false;
 
+      const motionAnalyzer = createMotionAnalyzer(video);
+
       const captureFrame = () => {
         if (isProcessing) return; // Already completed or failed
-        
-        console.log(`[Frame Extraction] Capturing frame ${frames.length + 1}/${sampleTimes.length} at ${video.currentTime.toFixed(2)}s`);
+
+        const currentTargetTime = frameTargets[index] ?? frameTargets[frameTargets.length - 1] ?? video.currentTime;
+        console.log(`[Frame Extraction] Capturing frame ${frames.length + 1}/${frameCount} at ${video.currentTime.toFixed(2)}s (target ${currentTargetTime.toFixed(2)}s)`);
         console.log(`[Frame Extraction] Video state: readyState=${video.readyState}, paused=${video.paused}, videoWidth=${video.videoWidth}`);
         
-        // Wait for video to be ready
         if (video.readyState < 2 || video.videoWidth === 0) {
           console.warn('[Frame Extraction] Video not ready, waiting...');
           setTimeout(() => captureFrame(), 100);
@@ -318,23 +357,31 @@ const extractVideoPayload = (
           canvas.height = video.videoHeight || 720;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const motionScore = motionAnalyzer.measure();
+
           frames.push({
             dataUrl,
             mimeType: 'image/jpeg',
-            timestampSeconds: Number(sampleTimes[index].toFixed(2))
+            timestampSeconds: Number(currentTargetTime.toFixed(2))
           });
           
+          const adjustments = [];
+          if (isDurationAdjusted) adjustments.push('duration');
+          if (isMotionAdjusted) adjustments.push('motion');
+          const adjText = adjustments.length ? ` (${adjustments.join('+')} active)` : '';
+
           onProgress?.({
             phase: 'processing-video',
-            message: `Captured frame ${frames.length}/${sampleTimes.length}`,
+            message: `Captured frame ${frames.length}/${frameCount}${adjText}`,
             framesCaptured: frames.length,
-            totalFrames: sampleTimes.length
+            totalFrames: frameCount
           });
           
           index += 1;
           isSeeking = false;
 
-          if (index >= sampleTimes.length) {
+          const reachedEnd = frameTargets[index - 1] >= safeEnd - 0.05;
+          if (frames.length >= frameCount || reachedEnd) {
             console.log('[Frame Extraction] Complete - all frames captured');
             isProcessing = true;
             if (seekTimeout) clearTimeout(seekTimeout);
@@ -343,7 +390,7 @@ const extractVideoPayload = (
             return;
           }
 
-          // Move to next frame
+          extendTimeline(motionScore);
           seekToNextFrame();
         } catch (err) {
           console.error('[Frame Extraction] Capture error:', err);
@@ -353,20 +400,19 @@ const extractVideoPayload = (
 
       const seekToNextFrame = () => {
         if (isSeeking || isProcessing) return;
+        if (index >= frameCount) return;
         
         isSeeking = true;
-        const targetTime = sampleTimes[index];
+        const targetTime = frameTargets[index] ?? frameTargets[frameTargets.length - 1] ?? safeEnd;
         
-        console.log(`[Frame Extraction] Seeking to ${targetTime.toFixed(2)}s (frame ${index + 1}/${sampleTimes.length})`);
+        console.log(`[Frame Extraction] Seeking to ${targetTime.toFixed(2)}s (frame ${index + 1}/${frameCount})`);
         
         if (seekTimeout) clearTimeout(seekTimeout);
         
-        // Set timeout to force capture if seek hangs
         seekTimeout = window.setTimeout(() => {
           if (!isProcessing && isSeeking) {
             console.warn('[Frame Extraction] Seek timeout - attempting recovery');
             isSeeking = false;
-            // Try to capture at current position
             captureFrame();
           }
         }, 5000);
@@ -394,14 +440,14 @@ const extractVideoPayload = (
 
       const startCapture = () => {
         console.log(`[Frame Extraction] Starting capture - ${frameCount} frames over ${duration.toFixed(2)}s`);
-        console.log(`[Frame Extraction] Sample times:`, sampleTimes);
+        console.log(`[Frame Extraction] Initial targets:`, frameTargets);
         console.log(`[Frame Extraction] Video readyState: ${video.readyState}`);
         
         onProgress?.({
           phase: 'processing-video',
           message: 'Starting frame extraction...',
           framesCaptured: 0,
-          totalFrames: sampleTimes.length
+          totalFrames: frameCount
         });
         
         // Give video time to fully load on mobile
@@ -448,16 +494,36 @@ const extractVideoPayload = (
   });
 };
 
-const buildSampleTimeline = (safeEnd: number, count: number): number[] => {
-  if (count <= 1 || safeEnd <= 0) {
-    return [0];
-  }
+const createMotionAnalyzer = (video: HTMLVideoElement) => {
+  const width = Math.max(1, Math.min(MOTION_SAMPLE_WIDTH, video.videoWidth || MOTION_SAMPLE_WIDTH));
+  const aspect = video.videoWidth ? video.videoHeight / video.videoWidth : 1;
+  const height = Math.max(1, Math.round(width * (aspect || 1)));
 
-  const interval = safeEnd / (count - 1);
-  const times: number[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const t = Number((i * interval).toFixed(3));
-    times.push(t);
-  }
-  return times;
+  const motionCanvas = document.createElement('canvas');
+  motionCanvas.width = width;
+  motionCanvas.height = height;
+  const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+  let lastSample: Uint8ClampedArray | null = null;
+
+  return {
+    measure: (): number | null => {
+      if (!motionCtx) return null;
+      motionCtx.drawImage(video, 0, 0, width, height);
+      const imageData = motionCtx.getImageData(0, 0, width, height).data;
+      if (!lastSample) {
+        lastSample = new Uint8ClampedArray(imageData);
+        return 1;
+      }
+      let diff = 0;
+      for (let i = 0; i < imageData.length; i += 4) {
+        diff += Math.abs(imageData[i] - lastSample[i]);
+        diff += Math.abs(imageData[i + 1] - lastSample[i + 1]);
+        diff += Math.abs(imageData[i + 2] - lastSample[i + 2]);
+      }
+      const maxDiff = (imageData.length / 4) * 255 * 3;
+      const normalized = clamp(diff / maxDiff, 0, 1);
+      lastSample = new Uint8ClampedArray(imageData);
+      return normalized;
+    }
+  };
 };
