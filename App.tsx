@@ -14,7 +14,7 @@ import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
 import { AppSettings, AnalysisProgress, ModelProvider } from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
-import { analyzeMedia, getOllamaKey, saveOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
+import { analyzeMedia, getOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 
 export default function App() {
   const { debugLogs, addDebugLog } = useDebugPanel();
@@ -203,16 +203,12 @@ export default function App() {
         if (key) {
           setSettings((s) => ({ ...s, ollamaKey: key }));
         } else {
-          // If there's a session key from before login, save it to DB and persist for user
+          // If there's a session key from before login, use it for this session
+          // but do not automatically save it to DB as "Default"
           const sessionKey = sessionStorage.getItem('session_ollama_key');
           if (sessionKey) {
-            try {
-              await saveOllamaKey(sessionKey);
-              setSettings((s) => ({ ...s, ollamaKey: sessionKey }));
-              sessionStorage.removeItem('session_ollama_key');
-            } catch (err) {
-              console.warn('Failed to persist session key for user', err);
-            }
+            setSettings((s) => ({ ...s, ollamaKey: sessionKey }));
+            // We keep it in session storage so it persists on refresh until explicitly saved or cleared
           }
         }
       } catch (err) {

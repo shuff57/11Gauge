@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X } from 'lucide-react';
 import { AppSettings, ModelProvider } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
-import { testConnection, saveOllamaKey, getOllamaKey } from '../services/llm';
+import { testConnection, getOllamaKey } from '../services/llm';
 
 type ProviderSlug = 'ollama' | 'gemini' | 'openai';
 
@@ -116,16 +116,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       await testConnection(settings);
       let keyStored = false;
       if (settings.provider === ModelProvider.OLLAMA) {
-        // Save to sessionStorage if not logged in, otherwise persist to DB
-        if (user && user.email) {
-          keyStored = await saveOllamaKey(settings.ollamaKey);
-        } else {
+        // Only save to session storage for persistence across reloads if not logged in
+        // Logged in users should use Key Manager to save keys
+        if (!user?.email) {
           sessionStorage.setItem('session_ollama_key', settings.ollamaKey || '');
-          keyStored = false;
         }
       }
       setTestStatus('success');
-      setTestMessage(keyStored ? 'Connection verified and key saved securely.' : 'Connection verified successfully.');
+      setTestMessage('Connection verified successfully.');
     } catch (err: any) {
       setTestStatus('error');
       setTestMessage(err.message || 'Connection failed.');
