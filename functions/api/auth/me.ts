@@ -1,6 +1,7 @@
 import { getSessionUser } from '../../utils/session';
+import { withAdminFlag, type AdminEnv } from '../../utils/admin';
 
-interface Env {
+interface Env extends AdminEnv {
   USERS_DB?: D1Database;
 }
 
@@ -18,5 +19,5 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (!user) {
     return json({ user: null }, { status: 401 });
   }
-  return json({ user });
+  return json({ user: withAdminFlag(env, user) });
 };

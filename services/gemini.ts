@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { AppSettings, MediaPayload } from "../types";
-import { SYSTEM_PROMPT } from "../constants";
+import { resolveSystemPrompt } from "../constants";
 
 export const analyzeWithGemini = async (payload: MediaPayload, settings: AppSettings): Promise<string> => {
   // Prioritize user key if provided, otherwise fallback to env
@@ -21,8 +21,9 @@ export const analyzeWithGemini = async (payload: MediaPayload, settings: AppSett
     ? 'Analyze the following frames extracted from a short video clip. Consider their chronological order to explain the full scene.'
     : 'Analyze the provided image in detail.';
 
+  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
   const parts = [
-    { text: SYSTEM_PROMPT },
+    { text: systemPrompt },
     { text: descriptivePart },
     ...payload.frames.map((frame) => ({
       inlineData: {

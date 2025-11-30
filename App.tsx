@@ -7,14 +7,47 @@ const useDebugPanel = () => {
   };
   return { debugLogs, addDebugLog };
 };
-import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Camera } from 'lucide-react';
+
+const PRIMARY_SOURCE_CONTEXT_BUDGET = 4800;
+const MIN_CONTEXT_PER_SOURCE = 500;
+const PRIMARY_SOURCE_SELECTION_KEY = 'primary-source-selection';
+
+const formatPrimarySourceContext = (manifest: PrimarySourceManifest, budget: number): string => {
+  let remaining = Math.max(MIN_CONTEXT_PER_SOURCE, budget);
+  const lines: string[] = [];
+  for (const chunk of manifest.chunks) {
+    if (remaining <= 0) break;
+    const allowance = Math.min(chunk.text.length, remaining);
+    const snippet = chunk.text.slice(0, allowance);
+    lines.push(`- Page ${chunk.page}: ${snippet}${chunk.text.length > allowance ? '…' : ''}`);
+    remaining -= allowance;
+  }
+  return `Source: ${manifest.title} (pages ${manifest.pageCount})\n${lines.join('\n')}`;
+};
+
+const mergePrimarySourcesIntoPrompt = (
+  systemPrompt: string | null | undefined,
+  manifests: PrimarySourceManifest[]
+): string => {
+  const base = resolveSystemPrompt(systemPrompt);
+  if (!manifests.length) return base;
+  const perSourceBudget = Math.max(
+    MIN_CONTEXT_PER_SOURCE,
+    Math.floor(PRIMARY_SOURCE_CONTEXT_BUDGET / manifests.length)
+  );
+  const contextBlocks = manifests.map((manifest) => formatPrimarySourceContext(manifest, perSourceBudget)).join('\n\n');
+  return `${base}\n\nPRIMARY SOURCE EVIDENCE (cite titles + pages):\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page.`;
+};
+import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, BookMarked } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { KeyManagerModal } from './components/KeyManagerModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
-import { AppSettings, AnalysisProgress, ModelProvider } from './types';
-import { MODEL_LABELS, DEFAULT_SETTINGS } from './constants';
+import { PrimarySourceModal } from './components/PrimarySourceModal';
+import { AppSettings, AnalysisProgress, ModelProvider, PrimarySourceSummary, PrimarySourceManifest, SessionUser } from './types';
+import { MODEL_LABELS, DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, resolveSystemPrompt } from './constants';
 import { analyzeMedia, getOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
+import { fetchPrimarySources, fetchPrimarySourceManifest, invalidatePrimarySourceCache } from './services/sources';
 
 export default function App() {
   const { debugLogs, addDebugLog } = useDebugPanel();
@@ -30,6 +63,9 @@ export default function App() {
     if (!merged.ollamaModel) {
       merged.ollamaModel = DEFAULT_SETTINGS.ollamaModel;
     }
+    if (!merged.systemPrompt) {
+      merged.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+    }
     return merged;
   };
 
@@ -42,9 +78,31 @@ export default function App() {
   const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
   const [keyUpdateTrigger, setKeyUpdateTrigger] = useState(0);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [user, setUser] = useState<{ email: string } | null>(() => {
+  const [user, setUser] = useState<SessionUser | null>(() => {
     const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed.email === 'string') {
+        return parsed;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  });
+  const [primarySources, setPrimarySources] = useState<PrimarySourceSummary[]>([]);
+  const [primarySourcesLoading, setPrimarySourcesLoading] = useState(false);
+  const [primarySourcesError, setPrimarySourcesError] = useState<string | null>(null);
+  const [isPrimarySourceModalOpen, setIsPrimarySourceModalOpen] = useState(false);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem(PRIMARY_SOURCE_SELECTION_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
@@ -111,10 +169,88 @@ export default function App() {
     setKeyUpdateTrigger(prev => prev + 1);
   }, []);
 
+  const togglePrimarySource = React.useCallback((id: string) => {
+    setSelectedSourceIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((value) => value !== id);
+      }
+      return [...prev, id];
+    });
+  }, []);
+
+  const refreshPrimarySources = React.useCallback(async () => {
+    if (!user) return;
+    setPrimarySourcesLoading(true);
+    setPrimarySourcesError(null);
+    try {
+      const data = await fetchPrimarySources();
+      setPrimarySources(data);
+    } catch (err: any) {
+      setPrimarySourcesError(err?.message || 'Unable to load primary sources');
+    } finally {
+      setPrimarySourcesLoading(false);
+    }
+  }, [user]);
+
+  const handleSourceUploaded = React.useCallback((source: PrimarySourceSummary) => {
+    setPrimarySources((prev) => [source, ...prev.filter((entry) => entry.id !== source.id)]);
+  }, []);
+
+  const handleSourceDeleted = React.useCallback((id: string) => {
+    setPrimarySources((prev) => prev.filter((entry) => entry.id !== id));
+    setSelectedSourceIds((prev) => prev.filter((entryId) => entryId !== id));
+    invalidatePrimarySourceCache(id);
+  }, []);
+
   // Persistence
   useEffect(() => {
     localStorage.setItem('vision-settings', JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    try {
+      if (selectedSourceIds.length > 0) {
+        localStorage.setItem(PRIMARY_SOURCE_SELECTION_KEY, JSON.stringify(selectedSourceIds));
+      } else {
+        localStorage.removeItem(PRIMARY_SOURCE_SELECTION_KEY);
+      }
+    } catch {
+      // ignore storage failures
+    }
+  }, [selectedSourceIds]);
+
+  useEffect(() => {
+    if (!user) {
+      setPrimarySources([]);
+      setPrimarySourcesError(null);
+      setSelectedSourceIds([]);
+      invalidatePrimarySourceCache();
+      return;
+    }
+    refreshPrimarySources();
+  }, [user, refreshPrimarySources]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSystemPrompt = async () => {
+      try {
+        const response = await fetch('/api/system-prompt');
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null);
+        if (!active || !data?.prompt) return;
+        setSettings((prev) => {
+          if (prev.systemPrompt === data.prompt) return prev;
+          return { ...prev, systemPrompt: data.prompt };
+        });
+      } catch (err) {
+        console.warn('Failed to load system prompt', err);
+      }
+    };
+    loadSystemPrompt();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -171,16 +307,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) return;
+    const needsHydration = !user || typeof user.isAdmin === 'undefined';
+    if (!needsHydration) return;
     let active = true;
     const fetchSessionUser = async () => {
       try {
         const response = await fetch('/api/auth/me');
+        if (!active) return;
+        if (response.status === 401) {
+          if (!user || typeof user.isAdmin === 'undefined') {
+            setUser(null);
+          }
+          return;
+        }
         if (!response.ok) return;
         const data = await response.json().catch(() => null);
         if (!active) return;
         if (data?.user?.email) {
-          setUser({ email: data.user.email });
+          setUser({
+            email: data.user.email,
+            isAdmin: Boolean(data.user.isAdmin),
+            id: data.user.id
+          });
         }
       } catch (err) {
         console.warn('Session fetch failed', err);
@@ -296,11 +444,25 @@ export default function App() {
     try {
       // If signed out, force empty key to ensure backend uses demo key
       // AND force provider to Ollama to prevent using other providers via local storage hacks
-      const effectiveSettings = user ? settings : { 
+      let effectiveSettings = user ? settings : { 
         ...settings, 
         provider: ModelProvider.OLLAMA,
         ollamaKey: '' 
       };
+
+      if (user && selectedSourceIds.length) {
+        setAnalysisProgress({ phase: 'preparing-media', message: 'Attaching primary sources...' });
+        setProgressLog((log) => [...log, 'Attaching primary sources...']);
+        try {
+          const manifests = await Promise.all(selectedSourceIds.map((id) => fetchPrimarySourceManifest(id)));
+          effectiveSettings = {
+            ...effectiveSettings,
+            systemPrompt: mergePrimarySourcesIntoPrompt(effectiveSettings.systemPrompt, manifests)
+          };
+        } catch (err: any) {
+          throw new Error(err?.message || 'Failed to load primary sources.');
+        }
+      }
       
       const text = await analyzeMedia(selectedFile, effectiveSettings, {
         onProgress: (progress) => {
@@ -410,6 +572,22 @@ export default function App() {
               </div>
             )}
           </div>
+          <button
+            onClick={() => (user ? setIsPrimarySourceModalOpen(true) : setIsAuthOpen(true))}
+            className={`relative p-2 rounded-full transition-colors ${
+              selectedSourceIds.length
+                ? 'text-emerald-300 bg-emerald-400/10 hover:bg-emerald-400/20'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+            }`}
+            title={user ? 'Manage primary sources' : 'Sign in to manage primary sources'}
+          >
+            <BookMarked className="w-5 h-5" />
+            {selectedSourceIds.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] px-1 rounded-full bg-emerald-500 text-[10px] text-black font-semibold flex items-center justify-center">
+                {selectedSourceIds.length}
+              </span>
+            )}
+          </button>
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             className={`p-2 rounded-full transition-colors ${isSettingsOpen ? 'text-white bg-zinc-900' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
@@ -505,6 +683,27 @@ export default function App() {
               onKeysUpdated={handleKeysUpdated}
             />
           )}
+
+          <PrimarySourceModal
+            isOpen={isPrimarySourceModalOpen}
+            onClose={() => setIsPrimarySourceModalOpen(false)}
+            canManage={Boolean(user)}
+            isAdmin={Boolean(user?.isAdmin)}
+            sources={primarySources}
+            selectedIds={selectedSourceIds}
+            onToggleSource={togglePrimarySource}
+            onUploaded={(source) => {
+              handleSourceUploaded(source);
+              refreshPrimarySources();
+            }}
+            onDeleted={(id) => {
+              handleSourceDeleted(id);
+              refreshPrimarySources();
+            }}
+            onRefresh={refreshPrimarySources}
+            loading={primarySourcesLoading}
+            error={primarySourcesError}
+          />
 
         </div>
       </header>
@@ -653,6 +852,12 @@ export default function App() {
               <Zap className="w-5 h-5 fill-black" />
               <span>{mediaKind === 'video' ? 'Analyze Video' : mediaKind === 'image' ? 'Analyze Image' : 'Analyze Media'}</span>
             </button>
+          )}
+
+          {user && selectedSourceIds.length > 0 && (
+            <p className="text-center text-xs text-emerald-300 mt-3">
+              Primary sources attached: {selectedSourceIds.length}
+            </p>
           )}
           
           {/* Result Action State (Reset) */}

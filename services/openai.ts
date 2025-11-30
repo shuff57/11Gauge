@@ -1,5 +1,5 @@
 import { AppSettings, MediaPayload } from "../types";
-import { SYSTEM_PROMPT } from "../constants";
+import { resolveSystemPrompt } from "../constants";
 
 export const analyzeWithOpenAI = async (payload: MediaPayload, settings: AppSettings): Promise<string> => {
   const apiKey = settings.openaiKey;
@@ -36,7 +36,7 @@ export const analyzeWithOpenAI = async (payload: MediaPayload, settings: AppSett
       messages: [
         {
           role: "system",
-          content: SYSTEM_PROMPT
+          content: resolveSystemPrompt(settings.systemPrompt)
         },
         {
           role: "user",

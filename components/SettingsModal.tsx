@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X } from 'lucide-react';
-import { AppSettings, ModelProvider } from '../types';
+import { AppSettings, ModelProvider, SessionUser } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
 import { testConnection, getOllamaKey } from '../services/llm';
 
@@ -37,7 +37,7 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: AppSettings;
   onUpdate: (newSettings: AppSettings) => void;
-  user?: { email: string } | null;
+  user?: SessionUser | null;
   onOpenKeyManager: () => void;
   keyUpdateTrigger?: number;
 }

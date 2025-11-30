@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle } from 'lucide-react';
-import { AppSettings, ModelProvider } from '../types';
+import { AppSettings, ModelProvider, SessionUser } from '../types';
 import { MODEL_LABELS } from '../constants';
 import { testConnection } from '../services/llm';
 
@@ -29,7 +29,7 @@ const MODEL_TO_PROVIDER: Record<ModelProvider, ProviderSlug> = {
 interface KeyManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: { email: string };
+  user: SessionUser;
   settings: AppSettings;
   onUpdate: (newSettings: AppSettings) => void;
   onKeysUpdated: () => void;

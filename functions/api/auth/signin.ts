@@ -1,5 +1,6 @@
 import { createSession, buildSessionCookie } from '../../utils/session';
-interface Env {
+import { withAdminFlag, type AdminEnv } from '../../utils/admin';
+interface Env extends AdminEnv {
   USERS_DB?: D1Database;
 }
 
@@ -81,7 +82,7 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
       const headers: HeadersInit = token ? { 'Set-Cookie': buildSessionCookie(token, { secure }) } : {};
       return json({ 
         success: true, 
-        user: { id: existingUser.id, email: existingUser.email },
+        user: withAdminFlag(env, { id: existingUser.id, email: existingUser.email }),
         isNewUser: false
       }, { headers });
     }
@@ -99,7 +100,7 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
     const headers: HeadersInit = token ? { 'Set-Cookie': buildSessionCookie(token, { secure }) } : {};
     return json({ 
       success: true, 
-      user: { id: result.meta.last_row_id, email: emailLower },
+      user: withAdminFlag(env, { id: result.meta.last_row_id, email: emailLower }),
       isNewUser: true
     }, { headers });
   } catch (err: any) {

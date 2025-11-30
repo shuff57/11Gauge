@@ -23,3 +23,19 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS primary_sources (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  summary TEXT,
+  page_count INTEGER NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  pdf_object_key TEXT NOT NULL,
+  manifest_object_key TEXT NOT NULL,
+  digest TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_primary_sources_user ON primary_sources(user_id, created_at DESC);

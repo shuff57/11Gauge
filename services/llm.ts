@@ -1,5 +1,5 @@
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider } from "../types";
-import { SYSTEM_PROMPT } from "../constants";
+import { resolveSystemPrompt } from "../constants";
 import { analyzeWithGemini, testGeminiConnection } from "./gemini";
 import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
 
@@ -113,9 +113,10 @@ const analyzeWithOllama = async (payload: MediaPayload, settings: AppSettings): 
     throw new Error("No visual data was detected in the upload.");
   }
 
+  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
   const promptPrefix = payload.kind === 'video'
-    ? `${SYSTEM_PROMPT}\n\nThe user supplied a short video clip that has been converted into ${images.length} chronological frames. Analyze trends across the frames as a single scene.`
-    : SYSTEM_PROMPT;
+    ? `${systemPrompt}\n\nThe user supplied a short video clip that has been converted into ${images.length} chronological frames. Analyze trends across the frames as a single scene.`
+    : systemPrompt;
 
   try {
     const response = await fetch(`/api/ollama/generate`, {

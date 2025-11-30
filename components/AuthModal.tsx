@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
+import type { SessionUser } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: { email: string }) => void;
+  onSuccess: (user: SessionUser) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -51,8 +52,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       }
 
       const data = await response.json();
+      if (!data?.user?.email) {
+        throw new Error('Malformed authentication response');
+      }
 
-      onSuccess({ email });
+      onSuccess({
+        email: data.user.email,
+        isAdmin: Boolean(data.user.isAdmin),
+        id: data.user.id
+      });
       setEmail('');
       setPassword('');
       onClose();

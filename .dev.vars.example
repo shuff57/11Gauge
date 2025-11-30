@@ -1,7 +1,18 @@
+# Gemini vision defaults
+GEMINI_API_KEY="your-gemini-api-key"
+
 # Google OAuth Configuration
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=https://your-domain.pages.dev/api/auth/google/callback
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GOOGLE_REDIRECT_URI="http://localhost:8788/api/auth/google/callback"
 
 # Key encryption secret (32+ characters recommended)
 OLLAMA_KEY_SECRET=your-long-random-secret
+
+# Demo API Keys (Backend)
+OLLAMA_API_KEY="your-ollama-cloud-key"
+OLLAMA_URL=https://ollama.com/api
+OLLAMA_MODEL="qwen3-vl:235b-instruct-cloud"
+
+# Comma-separated admin emails
+ADMIN_EMAILS="admin@example.com"

@@ -15,6 +15,44 @@ export interface AppSettings {
   geminiKeyId?: number | null;
   openaiKeyId?: number | null;
   ollamaKeyId?: number | null;
+  systemPrompt?: string | null;
+}
+
+export interface SessionUser {
+  id?: number;
+  email: string;
+  isAdmin?: boolean;
+}
+
+export interface PrimarySourceSummary {
+  id: string;
+  title: string;
+  originalName: string;
+  summary: string | null;
+  pageCount: number;
+  chunkCount: number;
+  createdAt: string;
+}
+
+export interface PrimarySourceChunk {
+  id: string;
+  order: number;
+  page: number;
+  text: string;
+}
+
+export interface PrimarySourceManifest extends PrimarySourceSummary {
+  version?: number;
+  chunks: PrimarySourceChunk[];
+}
+
+export interface PrimarySourceUploadManifest {
+  title: string;
+  originalName: string;
+  summary?: string;
+  pageCount: number;
+  chunks: PrimarySourceChunk[];
+  version?: number;
 }
 
 export type MediaKind = 'image' | 'video';
