@@ -39,3 +39,18 @@ CREATE TABLE IF NOT EXISTS primary_sources (
 );
 
 CREATE INDEX IF NOT EXISTS idx_primary_sources_user ON primary_sources(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS example_images (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label TEXT NOT NULL CHECK (label IN ('good', 'bad')),
+  title TEXT NOT NULL,
+  description TEXT,
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  object_key TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_example_images_label ON example_images(label, created_at DESC);

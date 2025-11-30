@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/pages-6c6kAv/functionsWorker-0.09364268369389928.mjs
+// .wrangler/tmp/pages-HppWNf/functionsWorker-0.9283123584551551.mjs
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var SESSION_COOKIE_NAME = "11g_session";
@@ -163,7 +163,113 @@ var onRequest = /* @__PURE__ */ __name2(async (context) => {
     return Response.redirect(redirectUrl.toString(), 302);
   }
 }, "onRequest");
+var requireDb = /* @__PURE__ */ __name2((env) => {
+  if (!env.USERS_DB) {
+    throw new Error("USERS_DB binding is not configured.");
+  }
+  return env.USERS_DB;
+}, "requireDb");
 var mapRow = /* @__PURE__ */ __name2((row) => {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    user_id: Number(row.user_id),
+    label: row.label === "good" ? "good" : "bad",
+    title: String(row.title),
+    description: row.description ?? null,
+    original_name: String(row.original_name),
+    mime_type: String(row.mime_type),
+    size_bytes: Number(row.size_bytes),
+    object_key: String(row.object_key),
+    created_at: String(row.created_at)
+  };
+}, "mapRow");
+var createExampleImageRecord = /* @__PURE__ */ __name2(async (env, input) => {
+  const db = requireDb(env);
+  await db.prepare(
+    `INSERT INTO example_images (
+      id, user_id, label, title, description,
+      original_name, mime_type, size_bytes,
+      object_key, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    input.id,
+    input.userId,
+    input.label,
+    input.title,
+    input.description ?? null,
+    input.originalName,
+    input.mimeType,
+    input.sizeBytes,
+    input.objectKey,
+    input.createdAt
+  ).run();
+  const record = await getExampleImageRecord(env, input.id);
+  if (!record) {
+    throw new Error("Failed to persist example image metadata.");
+  }
+  return record;
+}, "createExampleImageRecord");
+var listExampleImageRecords = /* @__PURE__ */ __name2(async (env, label) => {
+  const db = requireDb(env);
+  const base = `SELECT * FROM example_images`;
+  const filter = label ? " WHERE label = ?" : "";
+  const order = " ORDER BY datetime(created_at) DESC";
+  const statement = base + filter + order;
+  const rows = label ? await db.prepare(statement).bind(label).all() : await db.prepare(statement).all();
+  return Array.isArray(rows.results) ? rows.results.map(mapRow).filter((record) => Boolean(record)) : [];
+}, "listExampleImageRecords");
+var getExampleImageRecord = /* @__PURE__ */ __name2(async (env, id) => {
+  const db = requireDb(env);
+  const row = await db.prepare(
+    `SELECT * FROM example_images WHERE id = ?`
+  ).bind(id).first();
+  return mapRow(row || void 0);
+}, "getExampleImageRecord");
+var deleteExampleImageRecord = /* @__PURE__ */ __name2(async (env, id) => {
+  const db = requireDb(env);
+  await db.prepare("DELETE FROM example_images WHERE id = ?").bind(id).run();
+}, "deleteExampleImageRecord");
+var toExampleImageSummary = /* @__PURE__ */ __name2((record) => ({
+  id: record.id,
+  label: record.label,
+  title: record.title,
+  description: record.description,
+  originalName: record.original_name,
+  mimeType: record.mime_type,
+  sizeBytes: record.size_bytes,
+  createdAt: record.created_at
+}), "toExampleImageSummary");
+var onRequest2 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  const user = await getSessionUser(env, request);
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  if (!env.PRIMARY_SOURCES) {
+    return new Response("Example bucket missing", { status: 500 });
+  }
+  const url = new URL(request.url);
+  const segments = url.pathname.split("/");
+  const id = segments.length >= 4 ? segments[segments.length - 2] : null;
+  if (!id) {
+    return new Response("Invalid path", { status: 400 });
+  }
+  const record = await getExampleImageRecord(env, id);
+  if (!record) {
+    return new Response("Not found", { status: 404 });
+  }
+  const object = await env.PRIMARY_SOURCES.get(record.object_key);
+  if (!object || !object.body) {
+    return new Response("Not found", { status: 404 });
+  }
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": record.mime_type,
+      "Cache-Control": "public, max-age=86400"
+    }
+  });
+}, "onRequest");
+var mapRow2 = /* @__PURE__ */ __name2((row) => {
   if (!row) return null;
   return {
     id: String(row.id),
@@ -179,14 +285,14 @@ var mapRow = /* @__PURE__ */ __name2((row) => {
     created_at: String(row.created_at)
   };
 }, "mapRow");
-var requireDb = /* @__PURE__ */ __name2((env) => {
+var requireDb2 = /* @__PURE__ */ __name2((env) => {
   if (!env.USERS_DB) {
     throw new Error("USERS_DB binding is not configured.");
   }
   return env.USERS_DB;
 }, "requireDb");
 var createPrimarySourceRecord = /* @__PURE__ */ __name2(async (env, input) => {
-  const db = requireDb(env);
+  const db = requireDb2(env);
   await db.prepare(
     `INSERT INTO primary_sources (
       id, user_id, title, original_name, summary,
@@ -213,23 +319,23 @@ var createPrimarySourceRecord = /* @__PURE__ */ __name2(async (env, input) => {
   return record;
 }, "createPrimarySourceRecord");
 var listPrimarySourceRecords = /* @__PURE__ */ __name2(async (env, userId) => {
-  const db = requireDb(env);
+  const db = requireDb2(env);
   const rows = await db.prepare(
     `SELECT * FROM primary_sources
      WHERE user_id = ?
      ORDER BY datetime(created_at) DESC`
   ).bind(userId).all();
-  return Array.isArray(rows.results) ? rows.results.map(mapRow).filter((record) => Boolean(record)) : [];
+  return Array.isArray(rows.results) ? rows.results.map(mapRow2).filter((record) => Boolean(record)) : [];
 }, "listPrimarySourceRecords");
 var getPrimarySourceRecord = /* @__PURE__ */ __name2(async (env, userId, sourceId) => {
-  const db = requireDb(env);
+  const db = requireDb2(env);
   const row = await db.prepare(
     `SELECT * FROM primary_sources WHERE id = ? AND user_id = ?`
   ).bind(sourceId, userId).first();
-  return mapRow(row || void 0);
+  return mapRow2(row || void 0);
 }, "getPrimarySourceRecord");
 var deletePrimarySourceRecord = /* @__PURE__ */ __name2(async (env, sourceId) => {
-  const db = requireDb(env);
+  const db = requireDb2(env);
   await db.prepare("DELETE FROM primary_sources WHERE id = ?").bind(sourceId).run();
 }, "deletePrimarySourceRecord");
 var toPrimarySourceSummary = /* @__PURE__ */ __name2((record) => ({
@@ -241,7 +347,7 @@ var toPrimarySourceSummary = /* @__PURE__ */ __name2((record) => ({
   chunkCount: record.chunk_count,
   createdAt: record.created_at
 }), "toPrimarySourceSummary");
-var onRequest2 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
+var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   if (request.method !== "GET") {
     return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET" } });
   }
@@ -295,7 +401,7 @@ var onRequest2 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
     });
   }
 }, "onRequest");
-var onRequest3 = /* @__PURE__ */ __name2(async (context) => {
+var onRequest4 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   const reqUrl = new URL(request.url);
   const returnToParam = reqUrl.searchParams.get("return_to");
@@ -342,7 +448,7 @@ var json = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.string
     ...init.headers || {}
   }
 }), "json");
-var onRequest4 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest5 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json({ user: null }, { status: 401 });
@@ -363,7 +469,7 @@ var hashPassword = /* @__PURE__ */ __name2(async (password) => {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }, "hashPassword");
-var onRequest5 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest6 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   console.log("[Auth] Request received");
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -426,7 +532,7 @@ var onRequest5 = /* @__PURE__ */ __name2(async ({ request, env }) => {
     return json2({ error: "Authentication failed" }, { status: 500 });
   }
 }, "onRequest");
-var onRequest6 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest7 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const token = getSessionToken(request);
   if (token) {
     await deleteSession(env, token);
@@ -494,7 +600,7 @@ var json3 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.strin
     ...init.headers || {}
   }
 }), "json");
-var onRequest7 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest8 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const sessionUser = await getSessionUser(env, request);
   const secret = env.OLLAMA_KEY_SECRET;
   if (request.method === "POST") {
@@ -618,7 +724,7 @@ var relayResponse = /* @__PURE__ */ __name2(async (response) => {
     }
   });
 }, "relayResponse");
-var onRequest8 = /* @__PURE__ */ __name2(async (context) => {
+var onRequest9 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -661,7 +767,7 @@ var onRequest8 = /* @__PURE__ */ __name2(async (context) => {
     });
   }
 }, "onRequest");
-var onRequest9 = /* @__PURE__ */ __name2(async (context) => {
+var onRequest10 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -704,6 +810,66 @@ var json4 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.strin
     ...init.headers || {}
   }
 }), "json");
+var onRequest11 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  const url = new URL(request.url);
+  const id = url.pathname.split("/").pop();
+  if (!id) {
+    return json4({ error: "Example ID missing." }, { status: 400 });
+  }
+  if (request.method === "GET") {
+    return handleGet(id, request, env);
+  }
+  if (request.method === "DELETE") {
+    return handleDelete(id, request, env);
+  }
+  return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, DELETE" } });
+}, "onRequest");
+var handleGet = /* @__PURE__ */ __name2(async (id, request, env) => {
+  const user = await getSessionUser(env, request);
+  if (!user) {
+    return json4({ error: "Not authenticated" }, { status: 401 });
+  }
+  const record = await getExampleImageRecord(env, id);
+  if (!record) {
+    return json4({ error: "Not found" }, { status: 404 });
+  }
+  return json4({
+    image: {
+      ...toExampleImageSummary(record),
+      imageUrl: `/api/examples/${record.id}/image`
+    }
+  });
+}, "handleGet");
+var handleDelete = /* @__PURE__ */ __name2(async (id, request, env) => {
+  const user = await getSessionUser(env, request);
+  if (!user) {
+    return json4({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!isAdminEmail(env, user.email)) {
+    return json4({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!env.PRIMARY_SOURCES) {
+    return json4({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+  }
+  const record = await getExampleImageRecord(env, id);
+  if (!record) {
+    return json4({ error: "Not found" }, { status: 404 });
+  }
+  try {
+    await env.PRIMARY_SOURCES.delete(record.object_key);
+  } catch (err) {
+    console.warn("Failed to delete example image object:", err);
+  }
+  await deleteExampleImageRecord(env, id);
+  return json4({ success: true });
+}, "handleDelete");
+var json5 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
 var fetchKey = /* @__PURE__ */ __name2(async (env, userId, id) => {
   if (!env.USERS_DB) return null;
   const row = await env.USERS_DB.prepare(
@@ -711,24 +877,24 @@ var fetchKey = /* @__PURE__ */ __name2(async (env, userId, id) => {
   ).bind(id, userId).first();
   return row || null;
 }, "fetchKey");
-var onRequest10 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
+var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   const keyId = Number(params?.id);
   if (!keyId) {
-    return json4({ error: "Invalid key id" }, { status: 400 });
+    return json5({ error: "Invalid key id" }, { status: 400 });
   }
   const sessionUser = await getSessionUser(env, request);
   if (!sessionUser || !env.USERS_DB) {
-    return json4({ error: "Not authenticated" }, { status: 401 });
+    return json5({ error: "Not authenticated" }, { status: 401 });
   }
   const secret = env.OLLAMA_KEY_SECRET;
   if (!secret) {
-    return json4({ error: "Encryption secret not configured" }, { status: 500 });
+    return json5({ error: "Encryption secret not configured" }, { status: 500 });
   }
   if (request.method === "GET") {
     const row = await fetchKey(env, sessionUser.id, keyId);
-    if (!row) return json4({ error: "Key not found" }, { status: 404 });
+    if (!row) return json5({ error: "Key not found" }, { status: 404 });
     const decrypted = await decryptText(row.key_value, secret);
-    return json4({
+    return json5({
       key: {
         id: row.id,
         provider: row.provider,
@@ -741,7 +907,7 @@ var onRequest10 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   }
   if (request.method === "PUT") {
     const existing = await fetchKey(env, sessionUser.id, keyId);
-    if (!existing) return json4({ error: "Key not found" }, { status: 404 });
+    if (!existing) return json5({ error: "Key not found" }, { status: 404 });
     try {
       const payload = await request.json();
       const updates = [];
@@ -763,7 +929,7 @@ var onRequest10 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
         lastFour = rawKey.slice(-4);
       }
       if (!updates.length) {
-        return json4({ error: "No changes provided" }, { status: 400 });
+        return json5({ error: "No changes provided" }, { status: 400 });
       }
       const timestamp = (/* @__PURE__ */ new Date()).toISOString();
       updates.push("updated_at = ?");
@@ -774,10 +940,10 @@ var onRequest10 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
       ).bind(...bindings).run();
       const refreshed = await fetchKey(env, sessionUser.id, keyId);
       if (!refreshed) {
-        return json4({ error: "Key not found" }, { status: 404 });
+        return json5({ error: "Key not found" }, { status: 404 });
       }
       const decrypted = await decryptText(refreshed.key_value, secret);
-      return json4({
+      return json5({
         key: {
           id: refreshed.id,
           provider: refreshed.provider,
@@ -789,75 +955,75 @@ var onRequest10 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
       });
     } catch (err) {
       if (err?.message?.includes("UNIQUE")) {
-        return json4({ error: "A key with that label already exists for this provider." }, { status: 409 });
+        return json5({ error: "A key with that label already exists for this provider." }, { status: 409 });
       }
-      return json4({ error: err?.message || "Failed to update key" }, { status: 400 });
+      return json5({ error: err?.message || "Failed to update key" }, { status: 400 });
     }
   }
   if (request.method === "DELETE") {
     await env.USERS_DB.prepare("DELETE FROM user_keys WHERE id = ? AND user_id = ?").bind(keyId, sessionUser.id).run();
-    return json4({ success: true });
+    return json5({ success: true });
   }
   return new Response("Method Not Allowed", {
     status: 405,
     headers: { Allow: "GET, PUT, DELETE" }
   });
 }, "onRequest");
-var json5 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+var json6 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest11 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
+var onRequest13 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   if (request.method === "GET") {
-    return handleGet(request, env, params);
+    return handleGet2(request, env, params);
   }
   if (request.method === "DELETE") {
-    return handleDelete(request, env, params);
+    return handleDelete2(request, env, params);
   }
   return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, DELETE" } });
 }, "onRequest");
-var handleGet = /* @__PURE__ */ __name2(async (request, env, params) => {
+var handleGet2 = /* @__PURE__ */ __name2(async (request, env, params) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json5({ error: "Not authenticated" }, { status: 401 });
+    return json6({ error: "Not authenticated" }, { status: 401 });
   }
   const id = params?.id;
   if (!id) {
-    return json5({ error: "Missing source id" }, { status: 400 });
+    return json6({ error: "Missing source id" }, { status: 400 });
   }
   try {
     const record = await getPrimarySourceRecord(env, user.id, id);
     if (!record) {
-      return json5({ error: "Source not found" }, { status: 404 });
+      return json6({ error: "Source not found" }, { status: 404 });
     }
-    return json5({ source: toPrimarySourceSummary(record) });
+    return json6({ source: toPrimarySourceSummary(record) });
   } catch (err) {
     console.error("Primary source fetch failed:", err);
-    return json5({ error: "Unable to load source" }, { status: 500 });
+    return json6({ error: "Unable to load source" }, { status: 500 });
   }
 }, "handleGet");
-var handleDelete = /* @__PURE__ */ __name2(async (request, env, params) => {
+var handleDelete2 = /* @__PURE__ */ __name2(async (request, env, params) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json5({ error: "Not authenticated" }, { status: 401 });
+    return json6({ error: "Not authenticated" }, { status: 401 });
   }
   if (!isAdminEmail(env, user.email)) {
-    return json5({ error: "Forbidden" }, { status: 403 });
+    return json6({ error: "Forbidden" }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {
-    return json5({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+    return json6({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
   }
   const id = params?.id;
   if (!id) {
-    return json5({ error: "Missing source id" }, { status: 400 });
+    return json6({ error: "Missing source id" }, { status: 400 });
   }
   try {
     const record = await getPrimarySourceRecord(env, user.id, id);
     if (!record) {
-      return json5({ error: "Source not found" }, { status: 404 });
+      return json6({ error: "Source not found" }, { status: 404 });
     }
     await Promise.all([
       env.PRIMARY_SOURCES.delete(record.pdf_object_key).catch((err) => {
@@ -868,14 +1034,116 @@ var handleDelete = /* @__PURE__ */ __name2(async (request, env, params) => {
       })
     ]);
     await deletePrimarySourceRecord(env, id);
-    return json5({ success: true });
+    return json6({ success: true });
   } catch (err) {
     console.error("Primary source deletion failed:", err);
-    return json5({ error: "Unable to delete source" }, { status: 500 });
+    return json6({ error: "Unable to delete source" }, { status: 500 });
   }
 }, "handleDelete");
+var json7 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
+var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+var VALID_LABELS = ["good", "bad"];
+var onRequest14 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  if (request.method === "GET") {
+    return handleList(request, env);
+  }
+  if (request.method === "POST") {
+    return handleUpload(request, env);
+  }
+  return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, POST" } });
+}, "onRequest");
+var handleList = /* @__PURE__ */ __name2(async (request, env) => {
+  const user = await getSessionUser(env, request);
+  if (!user) {
+    return json7({ error: "Not authenticated" }, { status: 401 });
+  }
+  try {
+    const url = new URL(request.url);
+    const labelParam = url.searchParams.get("label");
+    const label = VALID_LABELS.includes(labelParam) ? labelParam : void 0;
+    const records = await listExampleImageRecords(env, label);
+    const images = records.map((record) => ({
+      ...toExampleImageSummary(record),
+      imageUrl: `/api/examples/${record.id}/image`
+    }));
+    return json7({ images });
+  } catch (err) {
+    console.error("Example image list failed:", err);
+    return json7({ error: "Unable to load example images." }, { status: 500 });
+  }
+}, "handleList");
+var handleUpload = /* @__PURE__ */ __name2(async (request, env) => {
+  const user = await getSessionUser(env, request);
+  if (!user) {
+    return json7({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!isAdminEmail(env, user.email)) {
+    return json7({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!env.PRIMARY_SOURCES) {
+    return json7({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+  }
+  const form = await request.formData();
+  const file = form.get("file");
+  const labelRaw = String(form.get("label") || "").toLowerCase();
+  const titleRaw = String(form.get("title") || "").trim();
+  const descriptionRaw = String(form.get("description") || "").trim();
+  if (!(file instanceof File)) {
+    return json7({ error: "Image file is required." }, { status: 400 });
+  }
+  if (!file.type?.startsWith("image/")) {
+    return json7({ error: "Only image uploads are supported." }, { status: 400 });
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return json7({ error: "Image exceeds the 10MB upload limit." }, { status: 400 });
+  }
+  const label = VALID_LABELS.includes(labelRaw) ? labelRaw : null;
+  if (!label) {
+    return json7({ error: "Label must be 'good' or 'bad'." }, { status: 400 });
+  }
+  const title = titleRaw || file.name.replace(/\.[^.]+$/, "").trim() || "Example Image";
+  const description = descriptionRaw || null;
+  try {
+    const id = crypto.randomUUID();
+    const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+    const objectKey = `examples/${label}/${user.id}/${id}/${encodeURIComponent(file.name)}`;
+    await env.PRIMARY_SOURCES.put(objectKey, file.stream(), {
+      httpMetadata: {
+        contentType: file.type || "application/octet-stream",
+        cacheControl: "public, max-age=31536000"
+      }
+    });
+    const record = await createExampleImageRecord(env, {
+      id,
+      userId: user.id,
+      label,
+      title,
+      description,
+      originalName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+      objectKey,
+      createdAt
+    });
+    return json7({
+      image: {
+        ...toExampleImageSummary(record),
+        imageUrl: `/api/examples/${record.id}/image`
+      }
+    }, { status: 201 });
+  } catch (err) {
+    console.error("Example image upload failed:", err);
+    return json7({ error: err?.message || "Failed to store example image." }, { status: 400 });
+  }
+}, "handleUpload");
 var AVAILABLE_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "gemini", "openai"]);
-var json6 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+var json8 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -911,21 +1179,21 @@ var summarizeRow = /* @__PURE__ */ __name2(async (row, secret) => {
     lastFour: decrypted ? decrypted.slice(-4) : null
   };
 }, "summarizeRow");
-var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest15 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const sessionUser = await getSessionUser(env, request);
   if (!sessionUser || !env.USERS_DB) {
-    return json6({ error: "Not authenticated" }, { status: 401 });
+    return json8({ error: "Not authenticated" }, { status: 401 });
   }
   const secret = env.OLLAMA_KEY_SECRET;
   if (!secret) {
-    return json6({ error: "Encryption secret not configured" }, { status: 500 });
+    return json8({ error: "Encryption secret not configured" }, { status: 500 });
   }
   if (request.method === "GET") {
     const rows = await env.USERS_DB.prepare(
       "SELECT id, provider, label, key_value, created_at, updated_at FROM user_keys WHERE user_id = ? ORDER BY created_at DESC"
     ).bind(sessionUser.id).all().then((res) => res.results || []);
     const keys = await Promise.all(rows.map((row) => summarizeRow(row, secret)));
-    return json6({ keys });
+    return json8({ keys });
   }
   if (request.method === "POST") {
     let provider;
@@ -938,7 +1206,7 @@ var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env }) => {
       key = (payload?.key || "").trim();
       if (!key) throw new Error("API key is required");
     } catch (err) {
-      return json6({ error: err?.message || "Invalid payload" }, { status: 400 });
+      return json8({ error: err?.message || "Invalid payload" }, { status: 400 });
     }
     try {
       const encrypted = await encryptText(key, secret);
@@ -947,7 +1215,7 @@ var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env }) => {
         "INSERT INTO user_keys (user_id, provider, label, key_value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
       ).bind(sessionUser.id, provider, label, encrypted, timestamp, timestamp).run();
       const id = result.meta?.last_row_id;
-      return json6({
+      return json8({
         key: {
           id,
           provider,
@@ -959,10 +1227,10 @@ var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env }) => {
       }, { status: 201 });
     } catch (err) {
       if (err?.message?.includes("UNIQUE")) {
-        return json6({ error: "A key with that label already exists for this provider." }, { status: 409 });
+        return json8({ error: "A key with that label already exists for this provider." }, { status: 409 });
       }
       console.error("Key insert error", err);
-      return json6({ error: "Failed to create key" }, { status: 500 });
+      return json8({ error: "Failed to create key" }, { status: 500 });
     }
   }
   return new Response("Method Not Allowed", {
@@ -970,7 +1238,7 @@ var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env }) => {
     headers: { Allow: "GET, POST" }
   });
 }, "onRequest");
-var json7 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
+var json9 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -1019,54 +1287,54 @@ var computeDigest = /* @__PURE__ */ __name2(async (chunks) => {
   const hash = await crypto.subtle.digest("SHA-256", encoder2.encode(payload));
   return toHex(hash);
 }, "computeDigest");
-var onRequest13 = /* @__PURE__ */ __name2(async ({ request, env }) => {
+var onRequest16 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   if (request.method === "GET") {
-    return handleList(request, env);
+    return handleList2(request, env);
   }
   if (request.method === "POST") {
-    return handleUpload(request, env);
+    return handleUpload2(request, env);
   }
   return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, POST" } });
 }, "onRequest");
-var handleList = /* @__PURE__ */ __name2(async (request, env) => {
+var handleList2 = /* @__PURE__ */ __name2(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json7({ error: "Not authenticated" }, { status: 401 });
+    return json9({ error: "Not authenticated" }, { status: 401 });
   }
   try {
     const records = await listPrimarySourceRecords(env, user.id);
     const sources = records.map(toPrimarySourceSummary);
-    return json7({ sources });
+    return json9({ sources });
   } catch (err) {
     console.error("Primary source list failed:", err);
-    return json7({ error: "Unable to load primary sources." }, { status: 500 });
+    return json9({ error: "Unable to load primary sources." }, { status: 500 });
   }
 }, "handleList");
-var handleUpload = /* @__PURE__ */ __name2(async (request, env) => {
+var handleUpload2 = /* @__PURE__ */ __name2(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json7({ error: "Not authenticated" }, { status: 401 });
+    return json9({ error: "Not authenticated" }, { status: 401 });
   }
   if (!isAdminEmail(env, user.email)) {
-    return json7({ error: "Forbidden" }, { status: 403 });
+    return json9({ error: "Forbidden" }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {
-    return json7({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+    return json9({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
   }
   const form = await request.formData();
   const file = form.get("file");
   const manifestRaw = form.get("manifest");
   if (!(file instanceof File)) {
-    return json7({ error: "PDF file is required" }, { status: 400 });
+    return json9({ error: "PDF file is required" }, { status: 400 });
   }
   if (typeof manifestRaw !== "string") {
-    return json7({ error: "Manifest payload missing" }, { status: 400 });
+    return json9({ error: "Manifest payload missing" }, { status: 400 });
   }
   let parsed;
   try {
     parsed = JSON.parse(manifestRaw);
   } catch (err) {
-    return json7({ error: "Invalid manifest payload" }, { status: 400 });
+    return json9({ error: "Invalid manifest payload" }, { status: 400 });
   }
   try {
     const validated = validateManifest(parsed, file.name);
@@ -1112,10 +1380,10 @@ var handleUpload = /* @__PURE__ */ __name2(async (request, env) => {
       digest,
       createdAt
     });
-    return json7({ source: toPrimarySourceSummary(record) }, { status: 201 });
+    return json9({ source: toPrimarySourceSummary(record) }, { status: 201 });
   } catch (err) {
     console.error("Primary source upload failed:", err);
-    return json7({ error: err?.message || "Failed to store primary source." }, { status: 400 });
+    return json9({ error: err?.message || "Failed to store primary source." }, { status: 400 });
   }
 }, "handleUpload");
 var DEFAULT_SYSTEM_PROMPT = `
@@ -1132,7 +1400,7 @@ var nodeEnv = typeof process !== "undefined" ? process.env : void 0;
 var defaultOllamaUrl = nodeEnv?.OLLAMA_URL || "";
 var defaultCloudVisionModel = "qwen3-vl:235b-instruct-cloud";
 var defaultOllamaModel = nodeEnv?.OLLAMA_MODEL || defaultCloudVisionModel;
-var onRequest14 = /* @__PURE__ */ __name2(async ({ env }) => {
+var onRequest17 = /* @__PURE__ */ __name2(async ({ env }) => {
   const prompt = env.SYSTEM_PROMPT?.trim() || DEFAULT_SYSTEM_PROMPT;
   return new Response(
     JSON.stringify({ prompt }),
@@ -1154,95 +1422,116 @@ var routes = [
     modules: [onRequest]
   },
   {
+    routePath: "/api/examples/:id/image",
+    mountPath: "/api/examples/:id",
+    method: "",
+    middlewares: [],
+    modules: [onRequest2]
+  },
+  {
     routePath: "/api/sources/:id/chunks",
     mountPath: "/api/sources/:id",
     method: "",
     middlewares: [],
-    modules: [onRequest2]
+    modules: [onRequest3]
   },
   {
     routePath: "/api/auth/google",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
-    modules: [onRequest3]
+    modules: [onRequest4]
   },
   {
     routePath: "/api/auth/me",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
-    modules: [onRequest4]
+    modules: [onRequest5]
   },
   {
     routePath: "/api/auth/signin",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
-    modules: [onRequest5]
+    modules: [onRequest6]
   },
   {
     routePath: "/api/auth/signout",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
-    modules: [onRequest6]
+    modules: [onRequest7]
   },
   {
     routePath: "/api/keys/ollama",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest7]
+    modules: [onRequest8]
   },
   {
     routePath: "/api/ollama/generate",
     mountPath: "/api/ollama",
     method: "",
     middlewares: [],
-    modules: [onRequest8]
+    modules: [onRequest9]
   },
   {
     routePath: "/api/ollama/test",
     mountPath: "/api/ollama",
     method: "",
     middlewares: [],
-    modules: [onRequest9]
+    modules: [onRequest10]
+  },
+  {
+    routePath: "/api/examples/:id",
+    mountPath: "/api/examples",
+    method: "",
+    middlewares: [],
+    modules: [onRequest11]
   },
   {
     routePath: "/api/keys/:id",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest10]
+    modules: [onRequest12]
   },
   {
     routePath: "/api/sources/:id",
     mountPath: "/api/sources",
     method: "",
     middlewares: [],
-    modules: [onRequest11]
+    modules: [onRequest13]
+  },
+  {
+    routePath: "/api/examples",
+    mountPath: "/api/examples",
+    method: "",
+    middlewares: [],
+    modules: [onRequest14]
   },
   {
     routePath: "/api/keys",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest12]
+    modules: [onRequest15]
   },
   {
     routePath: "/api/sources",
     mountPath: "/api/sources",
     method: "",
     middlewares: [],
-    modules: [onRequest13]
+    modules: [onRequest16]
   },
   {
     routePath: "/api/system-prompt",
     mountPath: "/api",
     method: "",
     middlewares: [],
-    modules: [onRequest14]
+    modules: [onRequest17]
   }
 ];
 function lexer(str) {
@@ -1910,7 +2199,7 @@ var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default2 = jsonError2;
 
-// .wrangler/tmp/bundle-J6G6I7/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-GvdQLZ/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__2 = [
   middleware_ensure_req_body_drained_default2,
   middleware_miniflare3_json_error_default2
@@ -1942,7 +2231,7 @@ function __facade_invoke__2(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__2, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-J6G6I7/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-GvdQLZ/middleware-loader.entry.ts
 var __Facade_ScheduledController__2 = class ___Facade_ScheduledController__2 {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -2042,4 +2331,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__2 as __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default2 as default
 };
-//# sourceMappingURL=functionsWorker-0.09364268369389928.js.map
+//# sourceMappingURL=functionsWorker-0.9283123584551551.js.map

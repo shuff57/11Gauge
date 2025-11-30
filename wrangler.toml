@@ -8,7 +8,7 @@ GOOGLE_CLIENT_ID = "463373796544-d6n9shflh87pnpds1ls4f5c4g7mcsimr.apps.googleuse
 GOOGLE_REDIRECT_URI = "https://11gauge.pages.dev/api/auth/google/callback"
 OLLAMA_URL = "https://ollama.com/api"
 OLLAMA_MODEL = "qwen3-vl:235b-instruct-cloud"
-ADMIN_EMAILS = "shuff57@gmail.com, example@example.com"
+ADMIN_EMAILS = "shuff57@gmail.com"
 
 # Optional system prompt override
 SYSTEM_PROMPT="""You are an expert professional welder, welding instructor, and quality control inspector.
@@ -102,6 +102,9 @@ Always focus on:
 Specific improvement actions  
 Skill mastery progression  
 Self-assessment readiness
+
+Non-welding related photos should be dismissed. 
+The return response should ask the user to upload a weld/welding related photo for analysis.
 """
 
 # --- Secrets (Add these in Cloudflare Dashboard > Settings > Environment Variables) ---

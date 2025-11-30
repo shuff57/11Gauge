@@ -55,6 +55,26 @@ export interface PrimarySourceUploadManifest {
   version?: number;
 }
 
+export type ExampleImageLabel = 'good' | 'bad';
+
+export interface ExampleImageSummary {
+  id: string;
+  label: ExampleImageLabel;
+  title: string;
+  description: string | null;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  imageUrl: string;
+  createdAt: string;
+}
+
+export interface ExampleImageUploadInput {
+  label: ExampleImageLabel;
+  title?: string;
+  description?: string;
+}
+
 export type MediaKind = 'image' | 'video';
 
 export interface MediaFrame {

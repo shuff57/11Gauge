@@ -38,16 +38,25 @@ const mergePrimarySourcesIntoPrompt = (
   const contextBlocks = manifests.map((manifest) => formatPrimarySourceContext(manifest, perSourceBudget)).join('\n\n');
   return `${base}\n\nPRIMARY SOURCE EVIDENCE (cite titles + pages):\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page.`;
 };
-import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, BookMarked } from 'lucide-react';
+import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Images } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { KeyManagerModal } from './components/KeyManagerModal';
 import { AuthModal } from './components/AuthModal';
 import { ResultPanel } from './components/ResultPanel';
 import { PrimarySourceModal } from './components/PrimarySourceModal';
-import { AppSettings, AnalysisProgress, ModelProvider, PrimarySourceSummary, PrimarySourceManifest, SessionUser } from './types';
+import {
+  AppSettings,
+  AnalysisProgress,
+  ModelProvider,
+  PrimarySourceSummary,
+  PrimarySourceManifest,
+  SessionUser,
+  ExampleImageSummary
+} from './types';
 import { MODEL_LABELS, DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, resolveSystemPrompt } from './constants';
 import { analyzeMedia, getOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 import { fetchPrimarySources, fetchPrimarySourceManifest, invalidatePrimarySourceCache } from './services/sources';
+import { fetchExampleImages, invalidateExampleImageCache } from './services/exampleImages';
 
 export default function App() {
   const { debugLogs, addDebugLog } = useDebugPanel();
@@ -91,10 +100,14 @@ export default function App() {
     }
     return null;
   });
+  const isAdminUser = Boolean(user?.isAdmin);
   const [primarySources, setPrimarySources] = useState<PrimarySourceSummary[]>([]);
   const [primarySourcesLoading, setPrimarySourcesLoading] = useState(false);
   const [primarySourcesError, setPrimarySourcesError] = useState<string | null>(null);
   const [isPrimarySourceModalOpen, setIsPrimarySourceModalOpen] = useState(false);
+  const [exampleImages, setExampleImages] = useState<ExampleImageSummary[]>([]);
+  const [exampleImagesLoading, setExampleImagesLoading] = useState(false);
+  const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -170,16 +183,22 @@ export default function App() {
   }, []);
 
   const togglePrimarySource = React.useCallback((id: string) => {
+    if (!isAdminUser) return;
     setSelectedSourceIds((prev) => {
       if (prev.includes(id)) {
         return prev.filter((value) => value !== id);
       }
       return [...prev, id];
     });
-  }, []);
+  }, [isAdminUser]);
 
   const refreshPrimarySources = React.useCallback(async () => {
-    if (!user) return;
+    if (!isAdminUser) {
+      setPrimarySources([]);
+      setPrimarySourcesError(null);
+      setPrimarySourcesLoading(false);
+      return;
+    }
     setPrimarySourcesLoading(true);
     setPrimarySourcesError(null);
     try {
@@ -190,7 +209,7 @@ export default function App() {
     } finally {
       setPrimarySourcesLoading(false);
     }
-  }, [user]);
+  }, [isAdminUser]);
 
   const handleSourceUploaded = React.useCallback((source: PrimarySourceSummary) => {
     setPrimarySources((prev) => [source, ...prev.filter((entry) => entry.id !== source.id)]);
@@ -200,6 +219,33 @@ export default function App() {
     setPrimarySources((prev) => prev.filter((entry) => entry.id !== id));
     setSelectedSourceIds((prev) => prev.filter((entryId) => entryId !== id));
     invalidatePrimarySourceCache(id);
+  }, []);
+
+  const refreshExampleImages = React.useCallback(async () => {
+    if (!user) {
+      setExampleImages([]);
+      setExampleImagesError(null);
+      setExampleImagesLoading(false);
+      return;
+    }
+    setExampleImagesLoading(true);
+    setExampleImagesError(null);
+    try {
+      const data = await fetchExampleImages();
+      setExampleImages(data);
+    } catch (err: any) {
+      setExampleImagesError(err?.message || 'Unable to load example images');
+    } finally {
+      setExampleImagesLoading(false);
+    }
+  }, [user]);
+
+  const handleExampleUploaded = React.useCallback((image: ExampleImageSummary) => {
+    setExampleImages((prev) => [image, ...prev.filter((entry) => entry.id !== image.id)]);
+  }, []);
+
+  const handleExampleDeleted = React.useCallback((id: string) => {
+    setExampleImages((prev) => prev.filter((entry) => entry.id !== id));
   }, []);
 
   // Persistence
@@ -227,8 +273,30 @@ export default function App() {
       invalidatePrimarySourceCache();
       return;
     }
+    if (!user.isAdmin) {
+      setPrimarySources([]);
+      setPrimarySourcesError(null);
+      setSelectedSourceIds([]);
+      invalidatePrimarySourceCache();
+      return;
+    }
     refreshPrimarySources();
   }, [user, refreshPrimarySources]);
+
+  useEffect(() => {
+    if (!user) {
+      setExampleImages([]);
+      setExampleImagesError(null);
+      return;
+    }
+    refreshExampleImages();
+  }, [user, refreshExampleImages]);
+
+  useEffect(() => {
+    if (!isAdminUser && selectedSourceIds.length) {
+      setSelectedSourceIds([]);
+    }
+  }, [isAdminUser, selectedSourceIds.length]);
 
   useEffect(() => {
     let active = true;
@@ -450,7 +518,7 @@ export default function App() {
         ollamaKey: '' 
       };
 
-      if (user && selectedSourceIds.length) {
+      if (isAdminUser && selectedSourceIds.length) {
         setAnalysisProgress({ phase: 'preparing-media', message: 'Attaching primary sources...' });
         setProgressLog((log) => [...log, 'Attaching primary sources...']);
         try {
@@ -575,15 +643,20 @@ export default function App() {
           <button
             onClick={() => (user ? setIsPrimarySourceModalOpen(true) : setIsAuthOpen(true))}
             className={`relative p-2 rounded-full transition-colors ${
-              selectedSourceIds.length
-                ? 'text-emerald-300 bg-emerald-400/10 hover:bg-emerald-400/20'
+              exampleImages.length
+                ? 'text-sky-300 bg-sky-500/10 hover:bg-sky-500/20'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
             }`}
-            title={user ? 'Manage primary sources' : 'Sign in to manage primary sources'}
+            title={user ? 'Open reference library' : 'Sign in to view reference library'}
           >
-            <BookMarked className="w-5 h-5" />
-            {selectedSourceIds.length > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] px-1 rounded-full bg-emerald-500 text-[10px] text-black font-semibold flex items-center justify-center">
+            <Images className="w-5 h-5" />
+            {user && exampleImages.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] px-1 rounded-full bg-sky-500 text-[10px] text-black font-semibold flex items-center justify-center">
+                {exampleImages.length}
+              </span>
+            )}
+            {isAdminUser && selectedSourceIds.length > 0 && (
+              <span className="absolute -bottom-1 -left-1 h-4 min-w-[1rem] px-1 rounded-full bg-emerald-500 text-[10px] text-black font-semibold flex items-center justify-center">
                 {selectedSourceIds.length}
               </span>
             )}
@@ -684,26 +757,40 @@ export default function App() {
             />
           )}
 
-          <PrimarySourceModal
-            isOpen={isPrimarySourceModalOpen}
-            onClose={() => setIsPrimarySourceModalOpen(false)}
-            canManage={Boolean(user)}
-            isAdmin={Boolean(user?.isAdmin)}
-            sources={primarySources}
-            selectedIds={selectedSourceIds}
-            onToggleSource={togglePrimarySource}
-            onUploaded={(source) => {
-              handleSourceUploaded(source);
-              refreshPrimarySources();
-            }}
-            onDeleted={(id) => {
-              handleSourceDeleted(id);
-              refreshPrimarySources();
-            }}
-            onRefresh={refreshPrimarySources}
-            loading={primarySourcesLoading}
-            error={primarySourcesError}
-          />
+          {user && (
+            <PrimarySourceModal
+              isOpen={isPrimarySourceModalOpen}
+              onClose={() => setIsPrimarySourceModalOpen(false)}
+              canManage={Boolean(user)}
+              isAdmin={isAdminUser}
+              sources={primarySources}
+              selectedIds={selectedSourceIds}
+              onToggleSource={togglePrimarySource}
+              onUploaded={(source) => {
+                handleSourceUploaded(source);
+                refreshPrimarySources();
+              }}
+              onDeleted={(id) => {
+                handleSourceDeleted(id);
+                refreshPrimarySources();
+              }}
+              onRefresh={refreshPrimarySources}
+              loading={primarySourcesLoading}
+              error={primarySourcesError}
+              referenceImages={exampleImages}
+              referenceImagesLoading={exampleImagesLoading}
+              referenceImagesError={exampleImagesError}
+              onReferenceRefresh={refreshExampleImages}
+              onReferenceUploaded={(image) => {
+                handleExampleUploaded(image);
+                refreshExampleImages();
+              }}
+              onReferenceDeleted={(id) => {
+                handleExampleDeleted(id);
+                refreshExampleImages();
+              }}
+            />
+          )}
 
         </div>
       </header>
@@ -854,7 +941,7 @@ export default function App() {
             </button>
           )}
 
-          {user && selectedSourceIds.length > 0 && (
+          {isAdminUser && selectedSourceIds.length > 0 && (
             <p className="text-center text-xs text-emerald-300 mt-3">
               Primary sources attached: {selectedSourceIds.length}
             </p>
