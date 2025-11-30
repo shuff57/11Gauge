@@ -4,10 +4,19 @@ import type {
   PrimarySourceUploadManifest,
   PrimarySourceChunk
 } from "../types";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
-import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+let cachedPdfjs: typeof import("pdfjs-dist/legacy/build/pdf") | null = null;
+
+const ensurePdfjs = async () => {
+  if (cachedPdfjs) return cachedPdfjs;
+  const [pdfModule, workerModule] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf"),
+    import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")
+  ]);
+  pdfModule.GlobalWorkerOptions.workerSrc = workerModule.default;
+  cachedPdfjs = pdfModule;
+  return cachedPdfjs;
+};
 
 export type SourceUploadPhase = 'idle' | 'extracting' | 'uploading';
 
@@ -47,6 +56,7 @@ const buildUploadManifest = async (
   file: File,
   options?: UploadOptions
 ): Promise<PrimarySourceUploadManifest> => {
+  const pdfjsLib = await ensurePdfjs();
   const data = new Uint8Array(await file.arrayBuffer());
   const loadingTask = pdfjsLib.getDocument({ data });
   const pdf = await loadingTask.promise;

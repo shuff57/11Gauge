@@ -1,6 +1,5 @@
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider } from "../types";
 import { resolveSystemPrompt } from "../constants";
-import { analyzeWithGemini, testGeminiConnection } from "./gemini";
 import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
 
 export const VIDEO_UPLOAD_LIMITS = {
@@ -36,7 +35,10 @@ export const analyzeMedia = async (
 
   switch (settings.provider) {
     case ModelProvider.GEMINI:
-      return finalizeWithProgress(() => analyzeWithGemini(payload, settings), options?.onProgress);
+      return finalizeWithProgress(
+        () => import("./gemini").then(({ analyzeWithGemini }) => analyzeWithGemini(payload, settings)),
+        options?.onProgress
+      );
     case ModelProvider.OPENAI:
       return finalizeWithProgress(() => analyzeWithOpenAI(payload, settings), options?.onProgress);
     case ModelProvider.OLLAMA:
@@ -49,7 +51,7 @@ export const analyzeMedia = async (
 export const testConnection = async (settings: AppSettings): Promise<void> => {
   switch (settings.provider) {
     case ModelProvider.GEMINI:
-      return testGeminiConnection(settings);
+      return import("./gemini").then(({ testGeminiConnection }) => testGeminiConnection(settings));
     case ModelProvider.OPENAI:
       return testOpenAIConnection(settings);
     case ModelProvider.OLLAMA:

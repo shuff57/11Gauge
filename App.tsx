@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 // Debug panel utility
 const useDebugPanel = () => {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -11,6 +11,7 @@ const useDebugPanel = () => {
 const PRIMARY_SOURCE_CONTEXT_BUDGET = 4800;
 const MIN_CONTEXT_PER_SOURCE = 500;
 const PRIMARY_SOURCE_SELECTION_KEY = 'primary-source-selection';
+const THINKING_START_STORAGE_KEY = 'analysis-thinking-start';
 
 const formatPrimarySourceContext = (manifest: PrimarySourceManifest, budget: number): string => {
   let remaining = Math.max(MIN_CONTEXT_PER_SOURCE, budget);
@@ -39,11 +40,7 @@ const mergePrimarySourcesIntoPrompt = (
   return `${base}\n\nPRIMARY SOURCE EVIDENCE (cite titles + pages):\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page.`;
 };
 import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Images } from 'lucide-react';
-import { SettingsModal } from './components/SettingsModal';
-import { KeyManagerModal } from './components/KeyManagerModal';
 import { AuthModal } from './components/AuthModal';
-import { ResultPanel } from './components/ResultPanel';
-import { PrimarySourceModal } from './components/PrimarySourceModal';
 import {
   AppSettings,
   AnalysisProgress,
@@ -57,6 +54,11 @@ import { MODEL_LABELS, DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, resolveSystemPro
 import { analyzeMedia, getOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 import { fetchPrimarySources, fetchPrimarySourceManifest, invalidatePrimarySourceCache } from './services/sources';
 import { fetchExampleImages, invalidateExampleImageCache } from './services/exampleImages';
+
+const SettingsModal = React.lazy(() => import('./components/SettingsModal').then((module) => ({ default: module.SettingsModal })));
+const KeyManagerModal = React.lazy(() => import('./components/KeyManagerModal').then((module) => ({ default: module.KeyManagerModal })));
+const ResultPanel = React.lazy(() => import('./components/ResultPanel').then((module) => ({ default: module.ResultPanel })));
+const PrimarySourceModal = React.lazy(() => import('./components/PrimarySourceModal').then((module) => ({ default: module.PrimarySourceModal })));
 
 export default function App() {
   const { debugLogs, addDebugLog } = useDebugPanel();
@@ -125,6 +127,8 @@ export default function App() {
   const providerMenuRef = useRef<HTMLDivElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [thinkingElapsedMs, setThinkingElapsedMs] = useState(0);
+  const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
@@ -137,6 +141,44 @@ export default function App() {
     const session = sessionStorage.getItem('has_used_demo') === 'true';
     setHasUsedDemo(local || session);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    if (!isAnalyzing) {
+      if (thinkingTimerRef.current) {
+        clearInterval(thinkingTimerRef.current);
+        thinkingTimerRef.current = null;
+      }
+      sessionStorage.removeItem(THINKING_START_STORAGE_KEY);
+      setThinkingElapsedMs(0);
+      return () => {};
+    }
+
+    const storedStart = sessionStorage.getItem(THINKING_START_STORAGE_KEY);
+    const startTimestamp = storedStart ? Number(storedStart) : Date.now();
+    if (!storedStart) {
+      sessionStorage.setItem(THINKING_START_STORAGE_KEY, String(startTimestamp));
+    }
+
+    const updateElapsed = () => {
+      setThinkingElapsedMs(Math.max(0, Date.now() - startTimestamp));
+    };
+
+    updateElapsed();
+
+    if (thinkingTimerRef.current) {
+      clearInterval(thinkingTimerRef.current);
+    }
+    thinkingTimerRef.current = window.setInterval(updateElapsed, 200);
+
+    return () => {
+      if (thinkingTimerRef.current) {
+        clearInterval(thinkingTimerRef.current);
+        thinkingTimerRef.current = null;
+      }
+    };
+  }, [isAnalyzing]);
 
   // Refs for hidden inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +199,22 @@ export default function App() {
     }
     return analysisProgress?.message;
   }, [progressLog, analysisProgress]);
+
+  const thinkingSeconds = Math.max(0, Math.floor(thinkingElapsedMs / 1000));
+  const thinkingWaveStyle = useMemo(() => {
+    if (!thinkingElapsedMs) {
+      return { color: 'rgb(161 161 170)' };
+    }
+    const phase = (Math.sin(thinkingElapsedMs / 500) + 1) / 2; // 0-1 wave
+    const hue = 210 + phase * 20;
+    const lightness = 60 + phase * 18;
+    const color = `hsl(${hue}, 85%, ${lightness}%)`;
+    const glow = `hsla(${hue}, 90%, ${Math.min(98, lightness + 15)}%, ${0.15 + phase * 0.25})`;
+    return {
+      color,
+      textShadow: `0 0 12px ${glow}`
+    } as React.CSSProperties;
+  }, [thinkingElapsedMs]);
 
   const describeProgress = (progress: AnalysisProgress): string => {
     switch (progress.phase) {
@@ -736,60 +794,66 @@ export default function App() {
             onSuccess={(user) => setUser(user)}
           />
 
-          <SettingsModal 
-            isOpen={isSettingsOpen} 
-            onClose={() => setIsSettingsOpen(false)}
-            settings={settings}
-            onUpdate={setSettings}
-            user={user}
-            onOpenKeyManager={() => setIsKeyManagerOpen(true)}
-            keyUpdateTrigger={keyUpdateTrigger}
-          />
-
-          {user && (
-            <KeyManagerModal
-              isOpen={isKeyManagerOpen}
-              onClose={() => setIsKeyManagerOpen(false)}
-              user={user}
+          <Suspense fallback={null}>
+            <SettingsModal 
+              isOpen={isSettingsOpen} 
+              onClose={() => setIsSettingsOpen(false)}
               settings={settings}
               onUpdate={setSettings}
-              onKeysUpdated={handleKeysUpdated}
+              user={user}
+              onOpenKeyManager={() => setIsKeyManagerOpen(true)}
+              keyUpdateTrigger={keyUpdateTrigger}
             />
+          </Suspense>
+
+          {user && (
+            <Suspense fallback={null}>
+              <KeyManagerModal
+                isOpen={isKeyManagerOpen}
+                onClose={() => setIsKeyManagerOpen(false)}
+                user={user}
+                settings={settings}
+                onUpdate={setSettings}
+                onKeysUpdated={handleKeysUpdated}
+              />
+            </Suspense>
           )}
 
           {user && (
-            <PrimarySourceModal
-              isOpen={isPrimarySourceModalOpen}
-              onClose={() => setIsPrimarySourceModalOpen(false)}
-              canManage={Boolean(user)}
-              isAdmin={isAdminUser}
-              sources={primarySources}
-              selectedIds={selectedSourceIds}
-              onToggleSource={togglePrimarySource}
-              onUploaded={(source) => {
-                handleSourceUploaded(source);
-                refreshPrimarySources();
-              }}
-              onDeleted={(id) => {
-                handleSourceDeleted(id);
-                refreshPrimarySources();
-              }}
-              onRefresh={refreshPrimarySources}
-              loading={primarySourcesLoading}
-              error={primarySourcesError}
-              referenceImages={exampleImages}
-              referenceImagesLoading={exampleImagesLoading}
-              referenceImagesError={exampleImagesError}
-              onReferenceRefresh={refreshExampleImages}
-              onReferenceUploaded={(image) => {
-                handleExampleUploaded(image);
-                refreshExampleImages();
-              }}
-              onReferenceDeleted={(id) => {
-                handleExampleDeleted(id);
-                refreshExampleImages();
-              }}
-            />
+            <Suspense fallback={null}>
+              <PrimarySourceModal
+                isOpen={isPrimarySourceModalOpen}
+                onClose={() => setIsPrimarySourceModalOpen(false)}
+                canManage={Boolean(user)}
+                isAdmin={isAdminUser}
+                sources={primarySources}
+                selectedIds={selectedSourceIds}
+                onToggleSource={togglePrimarySource}
+                onUploaded={(source) => {
+                  handleSourceUploaded(source);
+                  refreshPrimarySources();
+                }}
+                onDeleted={(id) => {
+                  handleSourceDeleted(id);
+                  refreshPrimarySources();
+                }}
+                onRefresh={refreshPrimarySources}
+                loading={primarySourcesLoading}
+                error={primarySourcesError}
+                referenceImages={exampleImages}
+                referenceImagesLoading={exampleImagesLoading}
+                referenceImagesError={exampleImagesError}
+                onReferenceRefresh={refreshExampleImages}
+                onReferenceUploaded={(image) => {
+                  handleExampleUploaded(image);
+                  refreshExampleImages();
+                }}
+                onReferenceDeleted={(id) => {
+                  handleExampleDeleted(id);
+                  refreshExampleImages();
+                }}
+              />
+            </Suspense>
           )}
 
         </div>
@@ -912,13 +976,21 @@ export default function App() {
 
               {/* Analysis Result */}
               {(isAnalyzing || result || error) && (
-                <ResultPanel
-                  loading={isAnalyzing}
-                  result={result}
-                  error={error}
-                  progress={analysisProgress}
-                  thoughts={progressLog}
-                />
+                <Suspense
+                  fallback={
+                    <div className="rounded-2xl border border-zinc-900 bg-zinc-950/70 p-6 text-center text-sm text-zinc-500">
+                      Preparing analysis view…
+                    </div>
+                  }
+                >
+                  <ResultPanel
+                    loading={isAnalyzing}
+                    result={result}
+                    error={error}
+                    progress={analysisProgress}
+                    thoughts={progressLog}
+                  />
+                </Suspense>
               )}
             </div>
           )}
@@ -959,9 +1031,14 @@ export default function App() {
           )}
 
           {isAnalyzing && (
-            <p className="text-center text-xs text-zinc-400 mt-3">
-              {latestProgressMessage || 'Working...'}
-            </p>
+            <div className="text-center mt-3 flex flex-col items-center gap-1">
+              <p className="text-xs text-zinc-400">
+                {latestProgressMessage || 'Working...'}
+              </p>
+              <p className="text-sm font-semibold tracking-widest font-mono" style={thinkingWaveStyle}>
+                Thinking {thinkingSeconds}s
+              </p>
+            </div>
           )}
 
           <p className="text-center text-[10px] text-zinc-600 mt-3 font-mono">
