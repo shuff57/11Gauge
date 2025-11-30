@@ -25,6 +25,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ollamaUrl: defaultOllamaUrl,
   ollamaModel: defaultOllamaModel,
   ollamaKey: defaultOllamaKey,
+  geminiKeyId: null,
+  openaiKeyId: null,
+  ollamaKeyId: null,
 };
 
 export const MODEL_LABELS = {

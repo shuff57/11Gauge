@@ -20,6 +20,12 @@ const PROVIDER_FIELD_MAP: Record<ProviderSlug, keyof AppSettings> = {
   openai: 'openaiKey'
 };
 
+const PROVIDER_ID_FIELD_MAP: Record<ProviderSlug, keyof AppSettings> = {
+  ollama: 'ollamaKeyId',
+  gemini: 'geminiKeyId',
+  openai: 'openaiKeyId'
+};
+
 const MODEL_TO_PROVIDER: Record<ModelProvider, ProviderSlug> = {
   [ModelProvider.OLLAMA]: 'ollama',
   [ModelProvider.GEMINI]: 'gemini',
@@ -48,11 +54,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
   const [savedKeys, setSavedKeys] = useState<SavedKeySummary[]>([]);
-  const [selectedSavedKey, setSelectedSavedKey] = useState<Record<ProviderSlug, string | null>>({
-    ollama: null,
-    gemini: null,
-    openai: null
-  });
   const [loadingSavedKeys, setLoadingSavedKeys] = useState(false);
   const [savedKeysError, setSavedKeysError] = useState<string | null>(null);
 
@@ -157,7 +158,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!isOpen || !user) {
       setSavedKeys([]);
       setSavedKeysError(null);
-      setSelectedSavedKey({ ollama: null, gemini: null, openai: null });
       setLoadingSavedKeys(false);
       return;
     }
@@ -204,9 +204,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const activeProviderLabel = MODEL_LABELS[settings.provider];
   const activeProviderKeys = savedKeysByProvider[activeProviderSlug];
 
-  const handleSavedKeySelect = async (provider: ProviderSlug, keyId: string) => {
-    setSelectedSavedKey((prev) => ({ ...prev, [provider]: keyId || null }));
-    if (!keyId) return;
+  const handleSavedKeySelect = async (provider: ProviderSlug, keyIdStr: string) => {
+    const keyId = keyIdStr ? Number(keyIdStr) : null;
+    
+    // Update the ID in settings immediately
+    onUpdate({ ...settings, [PROVIDER_ID_FIELD_MAP[provider]]: keyId });
+
+    if (!keyId) {
+      // If clearing selection, also clear the key value? 
+      // Or keep it? Let's clear it to be safe/consistent.
+      handleChange(PROVIDER_FIELD_MAP[provider], '');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/keys/${keyId}`);
       if (!response.ok) {
@@ -215,7 +225,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const data = await response.json();
       const value = data?.key?.value;
       if (!value) return;
-      handleChange(PROVIDER_FIELD_MAP[provider], value);
+      
+      // Update both the ID and the Value
+      onUpdate({ 
+        ...settings, 
+        [PROVIDER_ID_FIELD_MAP[provider]]: keyId,
+        [PROVIDER_FIELD_MAP[provider]]: value 
+      });
     } catch (err) {
       console.warn('Unable to load saved key', err);
     }
@@ -226,8 +242,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-h-[90vh] sm:w-[min(90vw,36rem)] lg:w-1/2 lg:max-w-[48rem] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
+        <div
+          className="w-full max-h-[90vh] sm:w-[min(90vw,36rem)] lg:w-1/2 lg:max-w-[48rem] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
             <div className="flex items-center gap-2">
               <Settings className="w-4 h-4 text-zinc-400" />
@@ -268,7 +287,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Use Saved Key</label>
                     <select
-                      value={selectedSavedKey.gemini || ''}
+                      value={settings.geminiKeyId || ''}
                       onChange={(e) => handleSavedKeySelect('gemini', e.target.value)}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
@@ -280,7 +299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ))}
                     </select>
                     {savedKeysByProvider.gemini.length === 0 && (
-                      <p className="text-[10px] text-zinc-500 pt-1">No saved keys found.</p>
+                      <p className="text-[10px] text-zinc-500 pt-1"></p>
                     )}
                   </div>
                 )}
@@ -305,7 +324,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Use Saved Key</label>
                     <select
-                      value={selectedSavedKey.openai || ''}
+                      value={settings.openaiKeyId || ''}
                       onChange={(e) => handleSavedKeySelect('openai', e.target.value)}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
@@ -317,7 +336,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ))}
                     </select>
                     {savedKeysByProvider.openai.length === 0 && (
-                      <p className="text-[10px] text-zinc-500 pt-1">No saved keys found.</p>
+                      <p className="text-[10px] text-zinc-500 pt-1"></p>
                     )}
                   </div>
                 )}
@@ -330,7 +349,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Use Saved Key</label>
                     <select
-                      value={selectedSavedKey.ollama || ''}
+                      value={settings.ollamaKeyId || ''}
                       onChange={(e) => handleSavedKeySelect('ollama', e.target.value)}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
@@ -342,7 +361,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ))}
                     </select>
                     {savedKeysByProvider.ollama.length === 0 && (
-                      <p className="text-[10px] text-zinc-500 pt-1">No saved keys found.</p>
+                      <p className="text-[10px] text-zinc-500 pt-1"></p>
                     )}
                   </div>
                 )}
@@ -351,22 +370,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {user ? (
               <>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm text-white font-medium">
-                      <Key className="w-4 h-4 text-zinc-400" />
-                      Manage Keys
-                    </div>
-                    <p className="text-[11px] text-zinc-500">Add, edit, or remove saved keys</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onOpenKeyManager}
-                    className="flex items-center gap-1 text-xs px-3 py-1.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition"
-                  >
-                    Open Key Manager
-                  </button>
-                </div>
               </>
             ) : (
               <div className="border border-dashed border-zinc-800 rounded-xl p-3 text-xs text-zinc-500 bg-zinc-950/30">
@@ -405,7 +408,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
         
         {/* Footer actions */}
-        <div className="p-4 border-t border-zinc-800 flex flex-col gap-4 shrink-0">
+        <div className="px-4 pb-4 pt-2 border-t border-zinc-800 flex flex-col gap-4 shrink-0">
           
           {/* Test Status Indicator */}
           {testStatus !== 'idle' && (
@@ -421,12 +424,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
              </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
             {user && (
               <button
                 onClick={handleTestConnection}
                 disabled={testStatus === 'loading' || (isOllama && !settings.ollamaUrl)}
-                className="w-full px-4 py-2 text-zinc-400 text-sm font-medium hover:text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg hover:bg-zinc-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Wifi className="w-4 h-4" />
                 Test Connection
@@ -435,7 +438,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <button 
               onClick={onClose}
-              className="w-full px-4 py-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg hover:bg-zinc-300 transition-colors"
+              className="flex-1 px-4 py-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg hover:bg-zinc-300 transition-colors"
             >
               Done
             </button>

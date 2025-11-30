@@ -12,6 +12,9 @@ export interface AppSettings {
   ollamaUrl: string;
   ollamaModel: string;
   ollamaKey: string;
+  geminiKeyId?: number | null;
+  openaiKeyId?: number | null;
+  ollamaKeyId?: number | null;
 }
 
 export type MediaKind = 'image' | 'video';

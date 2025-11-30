@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Key, RefreshCcw, Pencil, Trash2, Loader2, X } from 'lucide-react';
+import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle } from 'lucide-react';
 import { AppSettings, ModelProvider } from '../types';
 import { MODEL_LABELS } from '../constants';
+import { testConnection } from '../services/llm';
 
 type ProviderSlug = 'ollama' | 'gemini' | 'openai';
 
@@ -54,6 +55,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
   const [editingKeyLoadingId, setEditingKeyLoadingId] = useState<number | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<ProviderSlug>(MODEL_TO_PROVIDER[settings.provider]);
   const [inputValue, setInputValue] = useState('');
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState<string>('');
 
   const fetchSavedKeysFromApi = React.useCallback(async (): Promise<SavedKeySummary[]> => {
     if (!user) return [];
@@ -125,6 +128,38 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     setKeyForm({ id: null, label: '' });
     setInputValue('');
     setKeyActionError(null);
+    setTestStatus('idle');
+    setTestMessage('');
+  };
+
+  const handleTestConnection = async () => {
+    setTestStatus('loading');
+    setTestMessage('');
+    
+    const slugToEnum: Record<ProviderSlug, ModelProvider> = {
+      ollama: ModelProvider.OLLAMA,
+      gemini: ModelProvider.GEMINI,
+      openai: ModelProvider.OPENAI
+    };
+    
+    const providerEnum = slugToEnum[activeProviderSlug];
+    const providerField = PROVIDER_FIELD_MAP[activeProviderSlug];
+    
+    // Create temp settings with the key currently in the input
+    const tempSettings: AppSettings = {
+      ...settings,
+      provider: providerEnum,
+      [providerField]: inputValue
+    };
+
+    try {
+      await testConnection(tempSettings);
+      setTestStatus('success');
+      setTestMessage('Connection verified successfully.');
+    } catch (err: any) {
+      setTestStatus('error');
+      setTestMessage(err.message || 'Connection failed.');
+    }
   };
 
   const handleSavedKeySubmit = async () => {
@@ -227,9 +262,12 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50" onClick={onClose} />
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-        <div className="w-full max-h-[90vh] sm:w-[min(90vw,36rem)] lg:w-1/2 lg:max-w-[48rem] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col pointer-events-auto">
+      <div className="fixed inset-0 z-[60] bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
+        <div
+          className="w-full max-h-[90vh] sm:w-[min(90vw,36rem)] lg:w-1/2 lg:max-w-[48rem] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-zinc-400" />
@@ -249,6 +287,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                   onChange={(e) => {
                     setSelectedProvider(e.target.value as ProviderSlug);
                     setInputValue('');
+                    setTestStatus('idle');
+                    setTestMessage('');
                   }}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                 >
@@ -287,26 +327,57 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                   <input
                     type="password"
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={(e) => {
+                      setInputValue(e.target.value);
+                      if (testStatus !== 'idle') {
+                        setTestStatus('idle');
+                        setTestMessage('');
+                      }
+                    }}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
                     placeholder={`Enter ${activeProviderLabel} API key`}
                   />
                 </div>
                 
+                {testStatus !== 'idle' && (
+                   <div className={`text-[10px] px-3 py-2 rounded-lg border flex items-center gap-2 ${
+                     testStatus === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-200' :
+                     testStatus === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-200' :
+                     'bg-zinc-800 border-zinc-700 text-zinc-300'
+                   }`}>
+                     {testStatus === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
+                     {testStatus === 'success' && <CheckCircle className="w-3 h-3" />}
+                     {testStatus === 'error' && <AlertTriangle className="w-3 h-3 shrink-0" />}
+                     <span className="truncate">{testMessage || 'Testing connection...'}</span>
+                   </div>
+                )}
+
                 {keyActionError && (
                   <div className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
                     {keyActionError}
                   </div>
                 )}
-                <button
-                  type="button"
-                  disabled={isSavingKey}
-                  className="w-full flex items-center justify-center gap-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg py-1.5 hover:bg-[#a1a1aa]/90 transition disabled:opacity-60"
-                  onClick={handleSavedKeySubmit}
-                >
-                  {isSavingKey && <Loader2 className="w-3 h-3 animate-spin" />}
-                  {keyForm.id ? 'Update Key' : `Save ${activeProviderLabel} Key`}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleTestConnection}
+                    disabled={testStatus === 'loading' || !inputValue}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg py-2 hover:bg-zinc-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Wifi className="w-4 h-4" />
+                    Test Connection
+                  </button>
+                  
+                  <button
+                    type="button"
+                    disabled={isSavingKey}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg py-2 hover:bg-zinc-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleSavedKeySubmit}
+                  >
+                    {isSavingKey && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {keyForm.id ? 'Update' : 'Save'}
+                  </button>
+                </div>
               </div>
 
               <div className="border-t border-zinc-800 pt-3 space-y-2">
