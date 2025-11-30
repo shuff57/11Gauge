@@ -378,7 +378,7 @@ export default function App() {
         </button>
 
         <div className="flex items-center gap-3 relative">
-           <div className="relative hidden sm:block" ref={providerMenuRef}>
+           <div className="relative" ref={providerMenuRef}>
             <button
               onClick={() => setIsProviderMenuOpen(!isProviderMenuOpen)}
               className="text-xs font-mono text-zinc-600 uppercase tracking-widest hover:text-zinc-400 transition-colors"
