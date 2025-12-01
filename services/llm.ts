@@ -1,3 +1,4 @@
+// Service for handling LLM interactions and media processing
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider } from "../types";
 import { resolveSystemPrompt } from "../constants";
 import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
