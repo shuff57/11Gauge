@@ -5,10 +5,10 @@ import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
 export const VIDEO_UPLOAD_LIMITS = {
   maxDurationSeconds: 45,
   maxFileBytes: 80 * 1024 * 1024,
-  maxFrames: 6
+  maxFrames: 12
 } as const;
 
-const TARGET_FRAME_SPACING_SECONDS = 2;
+const TARGET_FRAME_SPACING_SECONDS = 1;
 const MIN_SAMPLE_INTERVAL_SECONDS = 0.4;
 const MAX_SAMPLE_INTERVAL_SECONDS = 3.5;
 const MOTION_SAMPLE_WIDTH = 96;
@@ -289,7 +289,7 @@ const extractVideoPayload = (
         return fail(`Videos must be ${VIDEO_UPLOAD_LIMITS.maxDurationSeconds} seconds or shorter.`);
       }
 
-      const targetSpacing = duration < 10 ? 0.8 : duration > 30 ? 3 : TARGET_FRAME_SPACING_SECONDS;
+      const targetSpacing = duration < 10 ? 0.5 : duration > 30 ? 2 : TARGET_FRAME_SPACING_SECONDS;
       const isDurationAdjusted = targetSpacing !== TARGET_FRAME_SPACING_SECONDS;
       let isMotionAdjusted = false;
 
