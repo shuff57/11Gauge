@@ -41,6 +41,7 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     const prompt = payload?.prompt;
     const images: string[] | undefined = payload?.images;
     const stream = Boolean(payload?.stream);
+    const think = Boolean(payload?.think);
 
     if (!prompt && (!images || images.length === 0)) {
       throw new Error("Prompt or images are required.");
@@ -52,7 +53,8 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
       model,
       prompt,
       images,
-      stream
+      stream,
+      think
     });
 
     return relayResponse(upstream);

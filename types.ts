@@ -15,6 +15,7 @@ export interface AppSettings {
   geminiKeyId?: number | null;
   openaiKeyId?: number | null;
   ollamaKeyId?: number | null;
+  ollamaThinking?: boolean;
   systemPrompt?: string | null;
 }
 
@@ -106,6 +107,15 @@ export interface AnalysisResult {
   text: string;
   loading: boolean;
   error?: string;
+}
+
+export interface OllamaMetrics {
+  totalDurationSeconds: number;
+  loadDurationSeconds: number;
+  promptEvalCount: number;
+  promptEvalDurationSeconds: number;
+  evalCount: number;
+  evalDurationSeconds: number;
 }
 
 export type VisionService = (

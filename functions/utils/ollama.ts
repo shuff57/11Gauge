@@ -64,6 +64,7 @@ interface ForwardOptions {
   prompt: string;
   images?: string[];
   stream?: boolean;
+  think?: boolean;
 }
 
 const forwardToOllama = async (opts: ForwardOptions): Promise<Response> => {
@@ -75,18 +76,21 @@ const forwardToOllama = async (opts: ForwardOptions): Promise<Response> => {
       prompt: opts.prompt,
       images: opts.images,
       stream: Boolean(opts.stream),
+      think: opts.think,
     })
   });
   return response;
 };
 
-const relayResponse = async (response: Response): Promise<Response> => {
-  const text = await response.text();
-  return new Response(text || "{}", {
+const relayResponse = (response: Response): Response => {
+  const headers = new Headers(response.headers);
+  // Ensure we don't block streaming
+  headers.delete("Content-Length");
+  headers.set("Content-Type", "application/x-ndjson");
+  
+  return new Response(response.body, {
     status: response.status,
-    headers: {
-      "Content-Type": "application/json",
-    }
+    headers
   });
 };
 

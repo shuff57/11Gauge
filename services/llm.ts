@@ -19,6 +19,9 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 type ProgressCallback = (progress: AnalysisProgress) => void;
 interface AnalyzeMediaOptions {
   onProgress?: ProgressCallback;
+  onPartialResponse?: (text: string) => void;
+  onThinking?: (text: string) => void;
+  onMetrics?: (metrics: import("../types").OllamaMetrics) => void;
 }
 
 const finalizeWithProgress = async (
@@ -48,7 +51,7 @@ export const analyzeMedia = async (
     case ModelProvider.OPENAI:
       return finalizeWithProgress(() => analyzeWithOpenAI(payload, settings), options?.onProgress);
     case ModelProvider.OLLAMA:
-      return finalizeWithProgress(() => analyzeWithOllama(payload, settings), options?.onProgress);
+      return finalizeWithProgress(() => analyzeWithOllama(payload, settings, options?.onPartialResponse, options?.onThinking, options?.onMetrics), options?.onProgress);
     default:
       throw new Error("Invalid provider selected");
   }
@@ -105,7 +108,13 @@ const getOllamaModel = (settings: AppSettings) => {
   return settings.ollamaModel?.trim() || process.env.OLLAMA_MODEL || "qwen3-vl:235b-instruct-cloud";
 };
 
-const analyzeWithOllama = async (payload: MediaPayload, settings: AppSettings): Promise<string> => {
+const analyzeWithOllama = async (
+  payload: MediaPayload, 
+  settings: AppSettings, 
+  onPartial?: (text: string) => void,
+  onThinking?: (text: string) => void,
+  onMetrics?: (metrics: import("../types").OllamaMetrics) => void
+): Promise<string> => {
   const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
   if (!configuredUrl) {
     throw new Error("Please configure your Ollama Cloud URL in settings or .env.");
@@ -136,7 +145,8 @@ const analyzeWithOllama = async (payload: MediaPayload, settings: AppSettings): 
         model: getOllamaModel(settings),
         prompt: promptPrefix,
         images,
-        stream: true
+        stream: true,
+        think: settings.ollamaThinking
       })
     });
 
@@ -151,22 +161,71 @@ const analyzeWithOllama = async (payload: MediaPayload, settings: AppSettings): 
     }
 
     let acc = '';
+    let thinkingAcc = '';
     const decoder = new TextDecoder();
+    let buffer = '';
+
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true }).trim();
-      if (!chunk) continue;
-      for (const line of chunk.split('\n')) {
-        if (!line) continue;
+      
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      // Keep the last partial line in the buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
+          if (parsed?.thinking) {
+            thinkingAcc += parsed.thinking;
+            onThinking?.(thinkingAcc);
+          }
           if (parsed?.response) {
             acc += parsed.response;
+            onPartial?.(acc);
+          }
+          if (parsed?.done && parsed?.total_duration) {
+            onMetrics?.({
+              totalDurationSeconds: (parsed.total_duration || 0) / 1e9,
+              loadDurationSeconds: (parsed.load_duration || 0) / 1e9,
+              promptEvalCount: parsed.prompt_eval_count || 0,
+              promptEvalDurationSeconds: (parsed.prompt_eval_duration || 0) / 1e9,
+              evalCount: parsed.eval_count || 0,
+              evalDurationSeconds: (parsed.eval_duration || 0) / 1e9
+            });
           }
         } catch {
-          // ignore partial lines until they form valid JSON
+          // ignore malformed lines
         }
+      }
+    }
+
+    // Process any remaining buffer
+    if (buffer.trim()) {
+      try {
+        const parsed = JSON.parse(buffer);
+        if (parsed?.thinking) {
+          thinkingAcc += parsed.thinking;
+          onThinking?.(thinkingAcc);
+        }
+        if (parsed?.response) {
+          acc += parsed.response;
+          onPartial?.(acc);
+        }
+        if (parsed?.done && parsed?.total_duration) {
+          onMetrics?.({
+            totalDurationSeconds: (parsed.total_duration || 0) / 1e9,
+            loadDurationSeconds: (parsed.load_duration || 0) / 1e9,
+            promptEvalCount: parsed.prompt_eval_count || 0,
+            promptEvalDurationSeconds: (parsed.prompt_eval_duration || 0) / 1e9,
+            evalCount: parsed.eval_count || 0,
+            evalDurationSeconds: (parsed.eval_duration || 0) / 1e9
+          });
+        }
+      } catch {
+        // ignore
       }
     }
 

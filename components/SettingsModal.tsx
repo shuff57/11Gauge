@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X, ExternalLink } from 'lucide-react';
 import { AppSettings, ModelProvider, SessionUser } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
 import { testConnection, getOllamaKey } from '../services/llm';
@@ -365,6 +365,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
                 )}
+                <div className="pt-2">
+                  <a 
+                    href="https://ollama.com/settings" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                  >
+                    View Usage & Account Settings (Ollama Cloud)
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="pt-2 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="ollamaThinking"
+                    checked={settings.ollamaThinking ?? false}
+                    onChange={(e) => handleChange('ollamaThinking', e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-blue-500/20"
+                  />
+                  <label htmlFor="ollamaThinking" className="text-sm text-zinc-300 select-none cursor-pointer">
+                    Enable Thinking (Reasoning Trace)
+                  </label>
+                </div>
               </>
             )}
 
