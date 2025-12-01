@@ -1,18 +1,19 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Loader2, AlertCircle, BrainCircuit } from 'lucide-react';
-import { AnalysisProgress } from '../types';
+import { Loader2, AlertCircle, BrainCircuit, Activity } from 'lucide-react';
+import { AnalysisProgress, OllamaMetrics } from '../types';
 
 interface ResultPanelProps {
   loading: boolean;
   result: string | null;
   reasoningTrace?: string | null;
+  metrics?: OllamaMetrics | null;
   error?: string;
   progress?: AnalysisProgress | null;
   thoughts?: string[];
 }
 
-export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reasoningTrace, error, progress, thoughts }) => {
+export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reasoningTrace, metrics, error, progress, thoughts }) => {
   if (loading && !result) {
     const detail = (() => {
       if (!progress) return 'Analyzing visual data...';
@@ -90,6 +91,41 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reaso
         <div className="mt-4 flex items-center gap-2 text-zinc-500 animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-xs">Generating...</span>
+        </div>
+      )}
+
+      {metrics && (
+        <div className="mt-8 pt-6 border-t border-zinc-800/50">
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 mb-3">
+            <Activity className="w-4 h-4" />
+            <span>Performance Metrics</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Total Duration</div>
+              <div className="text-sm font-mono text-zinc-300">{metrics.totalDurationSeconds.toFixed(2)}s</div>
+            </div>
+            <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Load Duration</div>
+              <div className="text-sm font-mono text-zinc-300">{metrics.loadDurationSeconds.toFixed(2)}s</div>
+            </div>
+            <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Prompt Eval</div>
+              <div className="text-sm font-mono text-zinc-300">{metrics.promptEvalDurationSeconds.toFixed(2)}s</div>
+              <div className="text-[10px] text-zinc-600">{metrics.promptEvalCount} tokens</div>
+            </div>
+            <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Generation</div>
+              <div className="text-sm font-mono text-zinc-300">{metrics.evalDurationSeconds.toFixed(2)}s</div>
+              <div className="text-[10px] text-zinc-600">{metrics.evalCount} tokens</div>
+            </div>
+            <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Speed</div>
+              <div className="text-sm font-mono text-zinc-300">
+                {(metrics.evalCount / metrics.evalDurationSeconds).toFixed(1)} t/s
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

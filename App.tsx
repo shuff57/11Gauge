@@ -486,6 +486,7 @@ export default function App() {
     setPreviewUrl(null);
     setResult(null);
     setReasoningTrace(null);
+    setOllamaMetrics(null);
     setError(undefined);
     setAnalysisProgress(null);
     setProgressLog([]);
@@ -511,6 +512,7 @@ export default function App() {
     setIsAnalyzing(true);
     setError(undefined);
     setReasoningTrace(null);
+    setOllamaMetrics(null);
     setProgressLog([]);
     setAnalysisProgress({ phase: 'preparing-media', message: 'Preparing upload...' });
     setProgressLog(['Preparing your media...']);
@@ -555,6 +557,9 @@ export default function App() {
         },
         onThinking: (trace) => {
           setReasoningTrace(trace);
+        },
+        onMetrics: (metrics) => {
+          setOllamaMetrics(metrics);
         }
       });
       setResult(text);
@@ -942,6 +947,7 @@ export default function App() {
                     loading={isAnalyzing}
                     result={result}
                     reasoningTrace={reasoningTrace}
+                    metrics={ollamaMetrics}
                     error={error}
                     progress={analysisProgress}
                     thoughts={progressLog}
