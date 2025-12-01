@@ -100,29 +100,25 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reaso
             <Activity className="w-4 h-4" />
             <span>Performance Metrics</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Total Duration</div>
               <div className="text-sm font-mono text-zinc-300">{metrics.totalDurationSeconds.toFixed(2)}s</div>
             </div>
             <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
-              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Load Duration</div>
-              <div className="text-sm font-mono text-zinc-300">{metrics.loadDurationSeconds.toFixed(2)}s</div>
-            </div>
-            <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Prompt Eval</div>
-              <div className="text-sm font-mono text-zinc-300">{metrics.promptEvalDurationSeconds.toFixed(2)}s</div>
-              <div className="text-[10px] text-zinc-600">{metrics.promptEvalCount} tokens</div>
+              <div className="text-sm font-mono text-zinc-300">{metrics.promptEvalCount} tokens</div>
             </div>
             <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Generation</div>
-              <div className="text-sm font-mono text-zinc-300">{metrics.evalDurationSeconds.toFixed(2)}s</div>
-              <div className="text-[10px] text-zinc-600">{metrics.evalCount} tokens</div>
+              <div className="text-sm font-mono text-zinc-300">{metrics.evalCount} tokens</div>
             </div>
             <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Speed</div>
               <div className="text-sm font-mono text-zinc-300">
-                {(metrics.evalCount / metrics.evalDurationSeconds).toFixed(1)} t/s
+                {metrics.totalDurationSeconds > 0 
+                  ? (metrics.evalCount / metrics.totalDurationSeconds).toFixed(1) 
+                  : '0.0'} tokens/sec
               </div>
             </div>
           </div>
