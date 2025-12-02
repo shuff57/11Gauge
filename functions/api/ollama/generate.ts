@@ -96,13 +96,20 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
           // Fetch all chunks with embeddings
           // Note: In production with many chunks, use Vectorize or a specialized index.
           // For < 1000 chunks, in-memory scan is fine.
-          const { results } = await env.USERS_DB.prepare(`
+          const { results: primaryResults } = await env.USERS_DB.prepare(`
             SELECT text_content, embedding_json, source_id FROM primary_source_chunks 
             WHERE embedding_json IS NOT NULL
           `).all();
 
-          if (results && results.length > 0) {
-            const scored = results.map((row: any) => {
+          const { results: imageResults } = await env.USERS_DB.prepare(`
+            SELECT text_content, embedding_json, image_id as source_id FROM example_image_chunks 
+            WHERE embedding_json IS NOT NULL
+          `).all();
+
+          const allResults = [...(primaryResults || []), ...(imageResults || [])];
+
+          if (allResults.length > 0) {
+            const scored = allResults.map((row: any) => {
               try {
                 const vec = JSON.parse(row.embedding_json);
                 return {

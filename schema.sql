@@ -62,7 +62,22 @@ CREATE TABLE IF NOT EXISTS example_images (
   mime_type TEXT NOT NULL,
   size_bytes INTEGER NOT NULL,
   object_key TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  material_type TEXT,
+  weld_process TEXT,
+  material_thickness TEXT,
+  joint_type TEXT,
+  weld_position TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_example_images_label ON example_images(label, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS example_image_chunks (
+  id TEXT PRIMARY KEY,
+  image_id TEXT NOT NULL REFERENCES example_images(id) ON DELETE CASCADE,
+  text_content TEXT NOT NULL,
+  embedding_json TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_example_image_chunks_image ON example_image_chunks(image_id);

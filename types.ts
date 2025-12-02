@@ -73,12 +73,22 @@ export interface ExampleImageSummary {
   sizeBytes: number;
   imageUrl: string;
   createdAt: string;
+  materialType?: string;
+  weldProcess?: string;
+  materialThickness?: string;
+  jointType?: string;
+  weldPosition?: string;
 }
 
 export interface ExampleImageUploadInput {
   label: ExampleImageLabel;
   title?: string;
   description?: string;
+  materialType?: string;
+  weldProcess?: string;
+  materialThickness?: string;
+  jointType?: string;
+  weldPosition?: string;
 }
 
 export type MediaKind = 'image' | 'video';

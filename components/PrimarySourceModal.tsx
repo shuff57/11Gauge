@@ -14,6 +14,15 @@ import {
 import type { ExampleImageLabel, ExampleImageSummary, PrimarySourceSummary } from '../types';
 import { deletePrimarySource, processAndUploadPrimarySource, type SourceUploadPhase } from '../services/sources';
 import { deleteExampleImage, getCachedExampleImageUrl, uploadExampleImage } from '../services/exampleImages';
+import { analyzeMedia } from '../services/llm';
+import { DEFAULT_SETTINGS } from '../constants';
+import { 
+  MATERIAL_TYPES, 
+  WELD_PROCESSES, 
+  MATERIAL_THICKNESSES, 
+  JOINT_TYPES, 
+  WELD_POSITIONS 
+} from '../constants';
 
 interface PrimarySourceModalProps {
   isOpen: boolean;
@@ -68,7 +77,11 @@ const ReferenceImageCard: React.FC<{
   return (
     <article className="relative border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-950">
       <div className="aspect-video bg-zinc-900">
-        <img src={resolvedSrc} alt={image.title} className="w-full h-full object-cover" loading="lazy" />
+        {image.mimeType.startsWith('video/') ? (
+          <video src={resolvedSrc} className="w-full h-full object-cover" controls playsInline />
+        ) : (
+          <img src={resolvedSrc} alt={image.title} className="w-full h-full object-cover" loading="lazy" />
+        )}
       </div>
       <div className="p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
@@ -135,11 +148,17 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
   const [imageLabel, setImageLabel] = React.useState<ExampleImageLabel>('good');
   const [imageTitle, setImageTitle] = React.useState('');
   const [imageDescription, setImageDescription] = React.useState('');
+  const [imageMaterialType, setImageMaterialType] = React.useState('');
+  const [imageWeldProcess, setImageWeldProcess] = React.useState('');
+  const [imageMaterialThickness, setImageMaterialThickness] = React.useState('');
+  const [imageJointType, setImageJointType] = React.useState('');
+  const [imageWeldPosition, setImageWeldPosition] = React.useState('');
   const [imageUploading, setImageUploading] = React.useState(false);
   const [imageUploadError, setImageUploadError] = React.useState<string | null>(null);
   const [imageDeleteError, setImageDeleteError] = React.useState<string | null>(null);
   const [imageDeletingId, setImageDeletingId] = React.useState<string | null>(null);
   const [imageRefreshing, setImageRefreshing] = React.useState(false);
+  const [selectedMediaFile, setSelectedMediaFile] = React.useState<File | null>(null);
 
   const filteredImages = React.useMemo(() => {
     if (imageFilter === 'all') return referenceImages;
@@ -208,27 +227,75 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
     }
   };
 
-  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !isAdmin) return;
+    
+    setSelectedMediaFile(file);
+    setImageTitle(file.name.replace(/\.[^.]+$/, ''));
+    setImageDescription('');
+    setImageLabel('good');
+    setImageMaterialType('');
+    setImageWeldProcess('');
+    setImageMaterialThickness('');
+    setImageJointType('');
+    setImageWeldPosition('');
+    setImageUploadError(null);
+    
+    if (event.target) event.target.value = '';
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!selectedMediaFile || !isAdmin) return;
+    
     setImageUploadError(null);
     setImageUploading(true);
     try {
-      const image = await uploadExampleImage(file, {
+      // 1. Analyze the image/video to get a description for RAG
+      let aiDescription = '';
+      try {
+        // Use a temporary settings object for this analysis
+        // We assume the user has configured their keys in the main app settings
+        // We'll try to read from localStorage to get the current configuration
+        const savedSettings = localStorage.getItem('vision-settings');
+        const settings = savedSettings ? JSON.parse(savedSettings) : DEFAULT_SETTINGS;
+        
+        // Override system prompt to force description
+        const descriptionSettings = {
+          ...settings,
+          systemPrompt: "Describe this welding example in detail. Focus on visual characteristics, quality indicators, and technical specifications. Do not provide advice, just description."
+        };
+
+        aiDescription = await analyzeMedia(selectedMediaFile, descriptionSettings);
+      } catch (analysisErr) {
+        console.warn('Failed to generate AI description for reference image:', analysisErr);
+        // Continue upload even if analysis fails, just won't be searchable via RAG
+      }
+
+      const image = await uploadExampleImage(selectedMediaFile, {
         label: imageLabel,
         title: imageTitle.trim() || undefined,
-        description: imageDescription.trim() || undefined
+        description: imageDescription.trim() || undefined,
+        materialType: imageMaterialType || undefined,
+        weldProcess: imageWeldProcess || undefined,
+        materialThickness: imageMaterialThickness || undefined,
+        jointType: imageJointType || undefined,
+        weldPosition: imageWeldPosition || undefined,
+        aiDescription: aiDescription || undefined
       });
       onReferenceUploaded(image);
-      setImageTitle('');
-      setImageDescription('');
+      setSelectedMediaFile(null);
       await onReferenceRefresh();
     } catch (err: any) {
       setImageUploadError(err?.message || 'Failed to upload example image.');
     } finally {
       setImageUploading(false);
-      if (event.target) event.target.value = '';
     }
+  };
+
+  const handleCancelUpload = () => {
+    setSelectedMediaFile(null);
+    setImageUploadError(null);
   };
 
   const handleImageRefresh = async () => {
@@ -392,7 +459,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                   >
                     {imageRefreshing || referenceImagesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   </button>
-                  {isAdmin && (
+                  {isAdmin && !selectedMediaFile && (
                     <button
                       onClick={triggerImageUpload}
                       type="button"
@@ -400,7 +467,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                       disabled={imageUploading}
                     >
                       {imageUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-                      {imageUploading ? 'Uploading…' : 'Upload image'}
+                      Upload Media
                     </button>
                   )}
                 </div>
@@ -415,8 +482,28 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
 
               {canManage && (
                 <>
-                  {isAdmin && (
+                  {isAdmin && selectedMediaFile && (
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-4">
+                      <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                        <h3 className="text-sm font-semibold text-white">New Reference Media</h3>
+                        <button onClick={handleCancelUpload} className="text-xs text-zinc-400 hover:text-white">Cancel</button>
+                      </div>
+
+                      {/* File Preview */}
+                      <div className="flex items-center gap-4 p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                        <div className="w-16 h-16 bg-zinc-900 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          {selectedMediaFile.type.startsWith('video/') ? (
+                            <video src={URL.createObjectURL(selectedMediaFile)} className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={URL.createObjectURL(selectedMediaFile)} alt="Preview" className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-white truncate">{selectedMediaFile.name}</p>
+                          <p className="text-xs text-zinc-500">{formatBytes(selectedMediaFile.size)} · {selectedMediaFile.type}</p>
+                        </div>
+                      </div>
+                      
                       <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
                         <div className="space-y-2">
                           <p className="text-[11px] uppercase tracking-widest text-zinc-500">Label</p>
@@ -455,7 +542,82 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                             type="text"
                           />
                         </div>
+                        
+                        {/* Material Properties */}
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-widest text-zinc-500">Material</p>
+                          <select
+                            value={imageMaterialType}
+                            onChange={(e) => setImageMaterialType(e.target.value)}
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                          >
+                            <option value="">Any Material</option>
+                            {MATERIAL_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-widest text-zinc-500">Process</p>
+                          <select
+                            value={imageWeldProcess}
+                            onChange={(e) => setImageWeldProcess(e.target.value)}
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                          >
+                            <option value="">Any Process</option>
+                            {WELD_PROCESSES.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-widest text-zinc-500">Thickness</p>
+                          <select
+                            value={imageMaterialThickness}
+                            onChange={(e) => setImageMaterialThickness(e.target.value)}
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                          >
+                            <option value="">Any Thickness</option>
+                            {MATERIAL_THICKNESSES.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-widest text-zinc-500">Joint Type</p>
+                          <select
+                            value={imageJointType}
+                            onChange={(e) => setImageJointType(e.target.value)}
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                          >
+                            <option value="">Any Joint</option>
+                            {JOINT_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-widest text-zinc-500">Position</p>
+                          <select
+                            value={imageWeldPosition}
+                            onChange={(e) => setImageWeldPosition(e.target.value)}
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                          >
+                            <option value="">Any Position</option>
+                            {WELD_POSITIONS.map(group => (
+                              <optgroup key={group.label} label={group.label}>
+                                {group.options.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        </div>
                       </div>
+                      
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={handleConfirmUpload}
+                          disabled={imageUploading}
+                          className="px-6 py-2 rounded-xl bg-white text-black text-sm font-medium shadow hover:bg-zinc-100 disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {imageUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                          {imageUploading ? 'Analyzing & Uploading...' : 'Confirm Upload'}
+                        </button>
+                      </div>
+                      
                       {imageUploadError && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2">{imageUploadError}</div>}
                     </div>
                   )}
@@ -526,7 +688,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
         </div>
       </div>
       <input ref={pdfInputRef} type="file" className="hidden" accept="application/pdf" onChange={handlePdfChange} disabled={!isAdmin} />
-      <input ref={imageInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={!isAdmin} />
+      <input ref={imageInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleImageChange} disabled={!isAdmin} />
     </>
   );
 };

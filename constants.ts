@@ -47,3 +47,35 @@ export const GEMINI_MODELS = [
   { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
   { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (Reasoning)' },
 ];
+
+export const MATERIAL_TYPES = ['Carbon Steel', 'Stainless Steel', 'Aluminum', 'Titanium', 'Cast Iron', 'Copper'];
+
+export const WELD_PROCESSES = [
+  { code: 'GMAW', name: 'MIG (Gas Metal Arc)' },
+  { code: 'GTAW', name: 'TIG (Gas Tungsten Arc)' },
+  { code: 'SMAW', name: 'Stick (Shielded Metal Arc)' },
+  { code: 'FCAW', name: 'Flux Core' }
+];
+
+export const MATERIAL_THICKNESSES = ['24 Gauge', '22 Gauge', '20 Gauge', '18 Gauge', '16 Gauge', '14 Gauge', '1/8"', '3/16"', '1/4"', '3/8"', '1/2"'];
+
+export const JOINT_TYPES = ['Butt Joint', 'Tee Joint', 'Lap Joint', 'Corner Joint', 'Edge Joint'];
+
+export const WELD_POSITIONS = [
+  { label: 'Fillet Welds', options: [
+    { value: '1F', label: '1F (Flat)' },
+    { value: '2F', label: '2F (Horizontal)' },
+    { value: '3F', label: '3F (Vertical)' },
+    { value: '4F', label: '4F (Overhead)' }
+  ]},
+  { label: 'Groove Welds', options: [
+    { value: '1G', label: '1G (Flat)' },
+    { value: '2G', label: '2G (Horizontal)' },
+    { value: '3G', label: '3G (Vertical)' },
+    { value: '4G', label: '4G (Overhead)' }
+  ]},
+  { label: 'Pipe Welds', options: [
+    { value: '5G', label: '5G (Pipe Fixed, Horizontal)' },
+    { value: '6G', label: '6G (Pipe Fixed, 45°)' }
+  ]}
+];

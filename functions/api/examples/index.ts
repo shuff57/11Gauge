@@ -2,6 +2,7 @@ import { getSessionUser, type SessionEnv } from "../../utils/session";
 import { isAdminEmail, type AdminEnv } from "../../utils/admin";
 import {
   createExampleImageRecord,
+  createExampleImageChunk,
   listExampleImageRecords,
   toExampleImageSummary,
   type ExampleImageLabel
@@ -10,6 +11,7 @@ import {
 interface ExampleEnv extends SessionEnv, AdminEnv {
   PRIMARY_SOURCES?: R2Bucket;
   USERS_DB?: D1Database;
+  AI?: any;
 }
 
 const json = (body: any, init: ResponseInit = {}) =>
@@ -21,7 +23,7 @@ const json = (body: any, init: ResponseInit = {}) =>
     }
   });
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024; // 50MB
 const VALID_LABELS: ExampleImageLabel[] = ['good', 'bad'];
 
 export const onRequest = async ({ request, env }: { request: Request; env: ExampleEnv }) => {
@@ -76,15 +78,21 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
   const labelRaw = String(form.get('label') || '').toLowerCase();
   const titleRaw = String(form.get('title') || '').trim();
   const descriptionRaw = String(form.get('description') || '').trim();
+  
+  const materialType = String(form.get('materialType') || '').trim() || null;
+  const weldProcess = String(form.get('weldProcess') || '').trim() || null;
+  const materialThickness = String(form.get('materialThickness') || '').trim() || null;
+  const jointType = String(form.get('jointType') || '').trim() || null;
+  const weldPosition = String(form.get('weldPosition') || '').trim() || null;
 
   if (!(file instanceof File)) {
-    return json({ error: 'Image file is required.' }, { status: 400 });
+    return json({ error: 'File is required.' }, { status: 400 });
   }
-  if (!file.type?.startsWith('image/')) {
-    return json({ error: 'Only image uploads are supported.' }, { status: 400 });
+  if (!file.type?.startsWith('image/') && !file.type?.startsWith('video/')) {
+    return json({ error: 'Only image or video uploads are supported.' }, { status: 400 });
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    return json({ error: 'Image exceeds the 10MB upload limit.' }, { status: 400 });
+    return json({ error: 'File exceeds the 50MB upload limit.' }, { status: 400 });
   }
 
   const label = VALID_LABELS.includes(labelRaw as ExampleImageLabel)
@@ -96,6 +104,7 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
 
   const title = titleRaw || file.name.replace(/\.[^.]+$/, '').trim() || 'Example Image';
   const description = descriptionRaw || null;
+  const aiDescription = String(form.get('aiDescription') || '').trim();
 
   try {
     const id = crypto.randomUUID();
@@ -119,8 +128,27 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
       mimeType: file.type || 'application/octet-stream',
       sizeBytes: file.size,
       objectKey,
-      createdAt
+      createdAt,
+      materialType,
+      weldProcess,
+      materialThickness,
+      jointType,
+      weldPosition
     });
+
+    // Generate embedding for AI description if provided
+    if (aiDescription && env.AI) {
+      try {
+        const { data } = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+          text: [aiDescription]
+        });
+        if (data && data[0]) {
+          await createExampleImageChunk(env, id, aiDescription, data[0]);
+        }
+      } catch (embedErr) {
+        console.warn('Failed to generate embedding for example image:', embedErr);
+      }
+    }
 
     return json({
       image: {

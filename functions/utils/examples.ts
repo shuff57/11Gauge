@@ -15,6 +15,11 @@ export interface ExampleImageRecord {
   size_bytes: number;
   object_key: string;
   created_at: string;
+  material_type?: string | null;
+  weld_process?: string | null;
+  material_thickness?: string | null;
+  joint_type?: string | null;
+  weld_position?: string | null;
 }
 
 const requireDb = (env: ExampleEnv): D1Database => {
@@ -36,7 +41,12 @@ const mapRow = (row?: any): ExampleImageRecord | null => {
     mime_type: String(row.mime_type),
     size_bytes: Number(row.size_bytes),
     object_key: String(row.object_key),
-    created_at: String(row.created_at)
+    created_at: String(row.created_at),
+    material_type: row.material_type ?? null,
+    weld_process: row.weld_process ?? null,
+    material_thickness: row.material_thickness ?? null,
+    joint_type: row.joint_type ?? null,
+    weld_position: row.weld_position ?? null
   };
 };
 
@@ -51,6 +61,11 @@ interface CreateExampleImageInput {
   sizeBytes: number;
   objectKey: string;
   createdAt: string;
+  materialType?: string | null;
+  weldProcess?: string | null;
+  materialThickness?: string | null;
+  jointType?: string | null;
+  weldPosition?: string | null;
 }
 
 export const createExampleImageRecord = async (
@@ -62,8 +77,10 @@ export const createExampleImageRecord = async (
     `INSERT INTO example_images (
       id, user_id, label, title, description,
       original_name, mime_type, size_bytes,
-      object_key, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      object_key, created_at,
+      material_type, weld_process, material_thickness,
+      joint_type, weld_position
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     input.id,
     input.userId,
@@ -74,7 +91,12 @@ export const createExampleImageRecord = async (
     input.mimeType,
     input.sizeBytes,
     input.objectKey,
-    input.createdAt
+    input.createdAt,
+    input.materialType ?? null,
+    input.weldProcess ?? null,
+    input.materialThickness ?? null,
+    input.jointType ?? null,
+    input.weldPosition ?? null
   ).run();
 
   const record = await getExampleImageRecord(env, input.id);
@@ -121,6 +143,23 @@ export const deleteExampleImageRecord = async (
   await db.prepare('DELETE FROM example_images WHERE id = ?').bind(id).run();
 };
 
+export const createExampleImageChunk = async (
+  env: ExampleEnv,
+  imageId: string,
+  textContent: string,
+  embedding: number[]
+): Promise<void> => {
+  const db = requireDb(env);
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const embeddingJson = JSON.stringify(embedding);
+
+  await db.prepare(
+    `INSERT INTO example_image_chunks (id, image_id, text_content, embedding_json, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).bind(id, imageId, textContent, embeddingJson, createdAt).run();
+};
+
 export interface ExampleImageSummaryPayload {
   id: string;
   label: ExampleImageLabel;
@@ -130,6 +169,11 @@ export interface ExampleImageSummaryPayload {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  materialType?: string | null;
+  weldProcess?: string | null;
+  materialThickness?: string | null;
+  jointType?: string | null;
+  weldPosition?: string | null;
 }
 
 export const toExampleImageSummary = (
@@ -143,4 +187,9 @@ export const toExampleImageSummary = (
   mimeType: record.mime_type,
   sizeBytes: record.size_bytes,
   createdAt: record.created_at,
+  materialType: record.material_type,
+  weldProcess: record.weld_process,
+  materialThickness: record.material_thickness,
+  jointType: record.joint_type,
+  weldPosition: record.weld_position
 });

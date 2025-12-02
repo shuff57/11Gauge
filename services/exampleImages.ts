@@ -1,4 +1,4 @@
-import type { ExampleImageLabel, ExampleImageSummary, ExampleImageUploadInput } from "../types";
+import type { ExampleImageLabel, ExampleImageSummary } from "../types";
 
 const imageCache = new Map<string, string>();
 
@@ -52,12 +52,24 @@ export const fetchExampleImages = async (label?: ExampleImageLabel): Promise<Exa
   return Array.isArray(payload?.images) ? payload.images : [];
 };
 
+export interface ExampleImageUploadInput {
+  label: ExampleImageLabel;
+  title?: string;
+  description?: string;
+  materialType?: string;
+  weldProcess?: string;
+  materialThickness?: string;
+  jointType?: string;
+  weldPosition?: string;
+  aiDescription?: string;
+}
+
 export const uploadExampleImage = async (
   file: File,
   input: ExampleImageUploadInput
 ): Promise<ExampleImageSummary> => {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Only image uploads are supported.');
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    throw new Error('Only image or video uploads are supported.');
   }
   const formData = new FormData();
   formData.append('file', file, file.name);
@@ -68,6 +80,12 @@ export const uploadExampleImage = async (
   if (input.description) {
     formData.append('description', input.description);
   }
+  if (input.materialType) formData.append('materialType', input.materialType);
+  if (input.weldProcess) formData.append('weldProcess', input.weldProcess);
+  if (input.materialThickness) formData.append('materialThickness', input.materialThickness);
+  if (input.jointType) formData.append('jointType', input.jointType);
+  if (input.weldPosition) formData.append('weldPosition', input.weldPosition);
+  if (input.aiDescription) formData.append('aiDescription', input.aiDescription);
 
   const response = await fetch('/api/examples', {
     method: 'POST',
