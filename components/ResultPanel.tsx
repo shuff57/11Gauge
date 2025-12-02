@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Loader2, AlertCircle, BrainCircuit, Activity } from 'lucide-react';
-import { AnalysisProgress, OllamaMetrics } from '../types';
+import { Loader2, AlertCircle, BrainCircuit, Activity, Layout } from 'lucide-react';
+import { AnalysisProgress, OllamaMetrics, AppSettings } from '../types';
 
 interface ResultPanelProps {
   loading: boolean;
@@ -11,9 +11,10 @@ interface ResultPanelProps {
   error?: string;
   progress?: AnalysisProgress | null;
   thoughts?: string[];
+  settings?: AppSettings;
 }
 
-export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reasoningTrace, metrics, error, progress, thoughts }) => {
+export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reasoningTrace, metrics, error, progress, thoughts, settings }) => {
   if (loading && !result) {
     const detail = (() => {
       if (!progress) return 'Analyzing visual data...';
@@ -91,6 +92,47 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reaso
         <div className="mt-4 flex items-center gap-2 text-zinc-500 animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-xs">Generating...</span>
+        </div>
+      )}
+
+      {settings && (settings.materialType || settings.weldProcess || settings.materialThickness || settings.jointType || settings.weldPosition) && (
+        <div className="mt-8 pt-6 border-t border-zinc-800/50">
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 mb-3">
+            <Layout className="w-4 h-4" />
+            <span>Material Configuration</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {settings.materialType && (
+              <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Material</div>
+                <div className="text-xs font-mono text-zinc-300 truncate" title={settings.materialType}>{settings.materialType}</div>
+              </div>
+            )}
+            {settings.weldProcess && (
+              <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Process</div>
+                <div className="text-xs font-mono text-zinc-300 truncate" title={settings.weldProcess}>{settings.weldProcess}</div>
+              </div>
+            )}
+            {settings.materialThickness && (
+              <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Thickness</div>
+                <div className="text-xs font-mono text-zinc-300 truncate" title={settings.materialThickness}>{settings.materialThickness}</div>
+              </div>
+            )}
+            {settings.jointType && (
+              <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Joint</div>
+                <div className="text-xs font-mono text-zinc-300 truncate" title={settings.jointType}>{settings.jointType}</div>
+              </div>
+            )}
+            {settings.weldPosition && (
+              <div className="bg-zinc-950/30 rounded p-2 border border-zinc-800/30">
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Position</div>
+                <div className="text-xs font-mono text-zinc-300 truncate" title={settings.weldPosition}>{settings.weldPosition}</div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

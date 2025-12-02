@@ -17,6 +17,11 @@ export interface AppSettings {
   ollamaKeyId?: number | null;
   ollamaThinking?: boolean;
   systemPrompt?: string | null;
+  materialType?: string;
+  weldProcess?: string;
+  materialThickness?: string;
+  jointType?: string;
+  weldPosition?: string;
 }
 
 export interface SessionUser {

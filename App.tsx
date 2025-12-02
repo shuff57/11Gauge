@@ -55,6 +55,7 @@ import { fetchPrimarySources, fetchPrimarySourceManifest, invalidatePrimarySourc
 import { fetchExampleImages, invalidateExampleImageCache } from './services/exampleImages';
 
 const SettingsModal = React.lazy(() => import('./components/SettingsModal').then((module) => ({ default: module.SettingsModal })));
+const SetupModal = React.lazy(() => import('./components/SetupModal').then((module) => ({ default: module.SetupModal })));
 const KeyManagerModal = React.lazy(() => import('./components/KeyManagerModal').then((module) => ({ default: module.KeyManagerModal })));
 const ResultPanel = React.lazy(() => import('./components/ResultPanel').then((module) => ({ default: module.ResultPanel })));
 const PrimarySourceModal = React.lazy(() => import('./components/PrimarySourceModal').then((module) => ({ default: module.PrimarySourceModal })));
@@ -85,6 +86,7 @@ export default function App() {
   });
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
   const [keyUpdateTrigger, setKeyUpdateTrigger] = useState(0);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -766,6 +768,17 @@ export default function App() {
             />
           </Suspense>
 
+          <Suspense fallback={null}>
+            <SetupModal 
+              isOpen={isSetupModalOpen} 
+              onClose={() => setIsSetupModalOpen(false)}
+              settings={settings}
+              onUpdate={setSettings}
+              onAnalyze={handleAnalyze}
+              mediaKind={mediaKind}
+            />
+          </Suspense>
+
           {user && (
             <Suspense fallback={null}>
               <KeyManagerModal
@@ -951,6 +964,7 @@ export default function App() {
                     error={error}
                     progress={analysisProgress}
                     thoughts={progressLog}
+                    settings={settings}
                   />
                 </Suspense>
               )}
@@ -967,11 +981,11 @@ export default function App() {
           {selectedFile && !result && !isAnalyzing && (
             /* Analyze Action State */
             <button 
-              onClick={handleAnalyze}
+              onClick={() => setIsSetupModalOpen(true)}
               className="w-full h-14 bg-white hover:bg-zinc-200 text-black rounded-full font-semibold text-base transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:scale-[1.01] active:scale-[0.99]"
             >
-              <Zap className="w-5 h-5 fill-black" />
-              <span>{mediaKind === 'video' ? 'Analyze Video' : mediaKind === 'image' ? 'Analyze Image' : 'Analyze Media'}</span>
+              <Settings className="w-5 h-5 text-black" />
+              <span>Setup Analysis</span>
             </button>
           )}
 

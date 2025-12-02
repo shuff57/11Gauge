@@ -131,9 +131,21 @@ const analyzeWithOllama = async (
   }
 
   const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
-  const promptPrefix = payload.kind === 'video'
+  let promptPrefix = payload.kind === 'video'
     ? `${systemPrompt}\n\nThe user supplied a short video clip that has been converted into ${images.length} chronological frames. Analyze trends across the frames as a single scene.`
     : systemPrompt;
+
+  // Append material context if available
+  const materialContext = [];
+  if (settings.materialType) materialContext.push(`Material Type: ${settings.materialType}`);
+  if (settings.weldProcess) materialContext.push(`Weld Process: ${settings.weldProcess}`);
+  if (settings.materialThickness) materialContext.push(`Material Thickness: ${settings.materialThickness}`);
+  if (settings.jointType) materialContext.push(`Joint Type: ${settings.jointType}`);
+  if (settings.weldPosition) materialContext.push(`Weld Position: ${settings.weldPosition}`);
+
+  if (materialContext.length > 0) {
+    promptPrefix += `\n\nCONTEXT:\nThe user has provided the following specifications for this weld:\n${materialContext.join('\n')}\n\nPlease use these specifications to grade the weld accordingly.`;
+  }
 
   try {
     const response = await fetch(`/api/ollama/generate`, {
