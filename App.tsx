@@ -177,7 +177,7 @@ export default function App() {
       case 'awaiting-model':
         return `Sending to ${MODEL_LABELS[settings.provider]}...`;
       case 'receiving-response':
-        return 'Composing response...';
+        return progress.message || 'Composing response...';
       default:
         return progress.message || 'Working...';
     }

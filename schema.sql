@@ -40,6 +40,18 @@ CREATE TABLE IF NOT EXISTS primary_sources (
 
 CREATE INDEX IF NOT EXISTS idx_primary_sources_user ON primary_sources(user_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS primary_source_chunks (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES primary_sources(id) ON DELETE CASCADE,
+  chunk_order INTEGER NOT NULL,
+  page_number INTEGER NOT NULL,
+  text_content TEXT NOT NULL,
+  embedding_json TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_primary_source_chunks_source ON primary_source_chunks(source_id);
+
 CREATE TABLE IF NOT EXISTS example_images (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

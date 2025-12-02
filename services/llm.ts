@@ -51,7 +51,7 @@ export const analyzeMedia = async (
     case ModelProvider.OPENAI:
       return finalizeWithProgress(() => analyzeWithOpenAI(payload, settings), options?.onProgress);
     case ModelProvider.OLLAMA:
-      return finalizeWithProgress(() => analyzeWithOllama(payload, settings, options?.onPartialResponse, options?.onThinking, options?.onMetrics), options?.onProgress);
+      return finalizeWithProgress(() => analyzeWithOllama(payload, settings, options?.onPartialResponse, options?.onThinking, options?.onMetrics, options?.onProgress), options?.onProgress);
     default:
       throw new Error("Invalid provider selected");
   }
@@ -113,7 +113,8 @@ const analyzeWithOllama = async (
   settings: AppSettings, 
   onPartial?: (text: string) => void,
   onThinking?: (text: string) => void,
-  onMetrics?: (metrics: import("../types").OllamaMetrics) => void
+  onMetrics?: (metrics: import("../types").OllamaMetrics) => void,
+  onProgress?: ProgressCallback
 ): Promise<string> => {
   const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
   if (!configuredUrl) {
@@ -165,6 +166,15 @@ const analyzeWithOllama = async (
     if (!response.ok) {
       const failure = await response.json().catch(() => undefined);
       throw new Error(failure?.error || `Request failed (${response.status}).`);
+    }
+
+    // Check for RAG header
+    const ragCount = response.headers.get('X-RAG-Count');
+    if (ragCount && Number(ragCount) > 0) {
+      onProgress?.({
+        phase: 'receiving-response',
+        message: `Found ${ragCount} relevant chunks in knowledge base. Injecting context.`
+      });
     }
 
     const reader = response.body?.getReader();

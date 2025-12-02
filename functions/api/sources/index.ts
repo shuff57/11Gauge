@@ -6,10 +6,15 @@ import {
   type PrimarySourceSummaryPayload
 } from "../../utils/sources";
 import { isAdminEmail, type AdminEnv } from "../../utils/admin";
+import { generateEmbedding, resolveBaseUrl } from "../../utils/ollama";
 
 interface SourceEnv extends SessionEnv, AdminEnv {
   PRIMARY_SOURCES?: R2Bucket;
   USERS_DB?: D1Database;
+  OLLAMA_URL?: string;
+  OLLAMA_API_KEY?: string;
+  OLLAMA_EMBEDDING_MODEL?: string;
+  AI?: any;
 }
 
 interface UploadChunkPayload {
@@ -187,6 +192,59 @@ const handleUpload = async (request: Request, env: SourceEnv) => {
       digest,
       createdAt,
     });
+
+    // Generate embeddings and store chunks in D1
+    if (env.USERS_DB) {
+      try {
+        const chunkInserts = await Promise.all(validated.chunks.map(async (chunk) => {
+          let embedding: number[] | null = null;
+          try {
+            // Prefer Cloudflare AI if available
+            if (env.AI) {
+              const { data } = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+                text: [chunk.text]
+              });
+              if (data && data[0]) embedding = data[0];
+            } 
+            // Fallback to Ollama if configured
+            else if (env.OLLAMA_URL) {
+              const baseUrl = resolveBaseUrl(env.OLLAMA_URL);
+              const apiKey = env.OLLAMA_API_KEY;
+              const embeddingModel = env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text";
+              embedding = await generateEmbedding({
+                baseUrl,
+                apiKey,
+                model: embeddingModel,
+                prompt: chunk.text
+              });
+            }
+          } catch (e) {
+            console.warn(`Failed to embed chunk ${chunk.id}:`, e);
+          }
+
+          return {
+            id: chunk.id,
+            source_id: sourceId,
+            chunk_order: chunk.order,
+            page_number: chunk.page,
+            text_content: chunk.text,
+            embedding_json: embedding ? JSON.stringify(embedding) : null,
+            created_at: createdAt
+          };
+        }));
+
+        const stmt = env.USERS_DB.prepare(`
+          INSERT INTO primary_source_chunks (id, source_id, chunk_order, page_number, text_content, embedding_json, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        await env.USERS_DB.batch(
+          chunkInserts.map(c => stmt.bind(c.id, c.source_id, c.chunk_order, c.page_number, c.text_content, c.embedding_json, c.created_at))
+        );
+      } catch (embedErr) {
+        console.error('Embedding generation failed (non-fatal):', embedErr);
+      }
+    }
 
     return json({ source: toPrimarySourceSummary(record) }, { status: 201 });
   } catch (err: any) {

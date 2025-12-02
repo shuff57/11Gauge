@@ -82,16 +82,49 @@ const forwardToOllama = async (opts: ForwardOptions): Promise<Response> => {
   return response;
 };
 
-const relayResponse = (response: Response): Response => {
+const relayResponse = (response: Response, extraHeaders?: Record<string, string>): Response => {
   const headers = new Headers(response.headers);
   // Ensure we don't block streaming
   headers.delete("Content-Length");
   headers.set("Content-Type", "application/x-ndjson");
   
+  if (extraHeaders) {
+    Object.entries(extraHeaders).forEach(([k, v]) => headers.set(k, v));
+  }
+  
   return new Response(response.body, {
     status: response.status,
     headers
   });
+};
+
+interface EmbeddingOptions {
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+  prompt: string;
+}
+
+const generateEmbedding = async (opts: EmbeddingOptions): Promise<number[]> => {
+  const response = await fetch(`${opts.baseUrl}/api/embeddings`, {
+    method: "POST",
+    headers: buildHeaders(opts.apiKey),
+    body: JSON.stringify({
+      model: opts.model,
+      prompt: opts.prompt,
+    })
+  });
+  
+  if (!response.ok) {
+    const err = await response.text().catch(() => response.statusText);
+    throw new Error(`Embedding failed (${response.status}): ${err}`);
+  }
+
+  const data = await response.json() as { embedding: number[] };
+  if (!Array.isArray(data.embedding)) {
+    throw new Error("Invalid embedding response format");
+  }
+  return data.embedding;
 };
 
 export {
@@ -104,5 +137,6 @@ export {
   resolveModel,
   buildHeaders,
   forwardToOllama,
-  relayResponse
+  relayResponse,
+  generateEmbedding
 };
