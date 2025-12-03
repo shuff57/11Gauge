@@ -131,6 +131,214 @@ const analyzeWithOllama = async (
     throw new Error("No visual data was detected in the upload.");
   }
 
+  // --- PIPELINE LOGIC ---
+  // If a reasoning model is configured, we use the 2-step pipeline.
+  // The vision model is hardcoded to qwen3-vl as per requirements.
+  const visionModel = "qwen3-vl:235b-instruct-cloud";
+  const usePipeline = Boolean(settings.ollamaReasoningModel);
+
+  if (usePipeline) {
+    // STEP 1: Vision Extraction
+    onProgress?.({ phase: 'awaiting-model', message: 'Analyzing visual features (Step 1/2)...' });
+    
+    const visionPrompt = `Analyze the provided image of a weld. Provide a detailed, objective visual description of the following aspects:
+1. Bead Consistency (width, height, straightness)
+2. Penetration & Fusion (toes, tie-in)
+3. Surface Profile (convexity, concavity)
+4. Defects (undercut, porosity, spatter, cracks)
+5. Heat Affected Zone (discoloration, width)
+6. Ripple Pattern (smoothness, spacing)
+7. Travel Stability (wandering, hesitation)
+
+OUTPUT FORMAT:
+Return ONLY this JSON structure:
+
+{
+  "rubric_criteria": [
+    {
+      "name": "Bead Consistency",
+      "pass_description": "Uniform width and height, straight travel path",
+      "fail_description": "Irregular width, varying height, wandering path"
+    },
+    {
+      "name": "Penetration & Fusion",
+      "pass_description": "Smooth tie-in at toes, no cold lap",
+      "fail_description": "Lack of fusion, cold lap, overlap"
+    },
+    {
+      "name": "Profile & Contour",
+      "pass_description": "Appropriate convexity/concavity for joint type",
+      "fail_description": "Excessive reinforcement or concavity"
+    },
+    {
+      "name": "Ripple Pattern",
+      "pass_description": "Evenly spaced, distinct ripples",
+      "fail_description": "Irregular spacing, coarse ripples"
+    },
+    {
+      "name": "Heat Control",
+      "pass_description": "No undercut, appropriate HAZ width",
+      "fail_description": "Undercut, excessive HAZ, burn-through"
+    }
+  ],
+  "student_observations": [
+    {
+      "criterion": "Bead Consistency",
+      "observed_condition": "Detailed observation of width/height/straightness",
+      "matches_reference": "pass | partial | fail"
+    },
+    {
+      "criterion": "Penetration & Fusion",
+      "observed_condition": "Detailed observation of toes and tie-in",
+      "matches_reference": "pass | partial | fail"
+    },
+    {
+      "criterion": "Profile & Contour",
+      "observed_condition": "Detailed observation of crown/flatness",
+      "matches_reference": "pass | partial | fail"
+    },
+    {
+      "criterion": "Ripple Pattern",
+      "observed_condition": "Detailed observation of ripple spacing/smoothness",
+      "matches_reference": "pass | partial | fail"
+    },
+    {
+      "criterion": "Heat Control",
+      "observed_condition": "Detailed observation of HAZ and undercut",
+      "matches_reference": "pass | partial | fail"
+    }
+  ],
+  "detected_defects": [
+    {
+      "type": "Defect Type (e.g. Porosity, Undercut, Spatter)",
+      "location": "Location on weld",
+      "severity": "minor | moderate | severe"
+    }
+  ]
+}`;
+
+    const visionResponse = await fetchOllamaGenerate({
+      url: configuredUrl,
+      key: apiKey,
+      model: visionModel,
+      prompt: visionPrompt,
+      images,
+      stream: true, // Stream to keep connection alive, but we buffer it
+      think: false, // Vision models usually don't think
+      ragQuery: null // Disable RAG for vision step
+    }, (partial) => {
+      // Optional: Show vision progress in debug or partial?
+      // For now, we just buffer it.
+    });
+
+    const visualFindings = visionResponse.text;
+    console.log("--- [Pipeline] Step 1 (Vision) Complete ---");
+    console.log("Visual Findings JSON:", visualFindings);
+
+    // STEP 2: Reasoning & Scoring
+    onProgress?.({ phase: 'receiving-response', message: 'Generating feedback report (Step 2/2)...' });
+
+    // Construct RAG query from visual findings
+    let ragQuery = "welding defects troubleshooting";
+    try {
+      // Strip markdown code blocks if present
+      const jsonStr = visualFindings.replace(/```json\n?|\n?```/g, '').trim();
+      const findings = JSON.parse(jsonStr);
+      
+      const defects = findings.detected_defects?.map((d: any) => d.type).join(', ');
+      const observations = findings.student_observations?.filter((o: any) => o.matches_reference === 'fail').map((o: any) => o.criterion).join(', ');
+      
+      const parts = [];
+      if (settings.weldProcess) parts.push(settings.weldProcess);
+      if (settings.materialType) parts.push(settings.materialType);
+      if (defects) parts.push(`defects: ${defects}`);
+      if (observations) parts.push(`issues: ${observations}`);
+      
+      if (parts.length > 0) {
+        ragQuery = `How to fix ${parts.join(' ')} in welding`;
+      }
+    } catch (e) {
+      console.warn('Failed to parse vision JSON for RAG query construction', e);
+    }
+
+    const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
+    let reasoningPrompt = `${systemPrompt}\n\n`;
+
+    // Append material context
+    const materialContext = [];
+    if (settings.materialType) materialContext.push(`Material Type: ${settings.materialType}`);
+    if (settings.weldProcess) materialContext.push(`Weld Process: ${settings.weldProcess}`);
+    if (settings.materialThickness) materialContext.push(`Material Thickness: ${settings.materialThickness}`);
+    if (settings.jointType) materialContext.push(`Joint Type: ${settings.jointType}`);
+    if (settings.weldPosition) materialContext.push(`Weld Position: ${settings.weldPosition}`);
+
+    if (materialContext.length > 0) {
+      reasoningPrompt += `CONTEXT:\nThe user has provided the following specifications for this weld:\n${materialContext.join('\n')}\n\n`;
+    }
+
+    reasoningPrompt += `You are provided with structured visual observations in JSON format below.
+
+**INPUT DATA:**
+\`\`\`json
+${visualFindings}
+\`\`\`
+
+**TASK:**
+Act as the Welding Instructor defined in your system prompt. Use the \`student_observations\` and \`detected_defects\` from the JSON above to populate your report.
+
+**REQUIRED OUTPUT FORMAT:**
+
+Generate a Markdown response exactly in this structure:
+
+### Detailed Assessment
+| Criterion | Score (0–4) | Pass/Fail | Notes |
+|-----------|-------------|-----------|-------|
+| Bead Consistency | [Score] | [Pass/Fail] | [Specific observation] |
+| Penetration & Fusion | [Score] | [Pass/Fail] | [Specific observation] |
+| Profile & Contour | [Score] | [Pass/Fail] | [Specific observation] |
+| Ripple Pattern | [Score] | [Pass/Fail] | [Specific observation] |
+| Heat Control | [Score] | [Pass/Fail] | [Specific observation] |
+| Defect Check | [Score] | [Pass/Fail] | [List defects or "None"] |
+
+### Summary Report
+**Final Grade:** [Letter Grade] ([Total Score]/24)
+**Key Strengths:**
+- [Strength 1]
+- [Strength 2]
+
+**Primary Issues:**
+- [Issue 1]
+- [Issue 2]
+
+**Next Practice Strategies:**
+- [Strategy 1]
+- [Strategy 2]
+
+**Safety Notes:**
+- [Safety Note]
+
+Based on the visual analysis above and the provided context, evaluate the weld according to this rubric. Provide the scores and feedback.`;
+
+    console.log("--- [Pipeline] Step 2 (Reasoning) Starting ---");
+    console.log("Target Model:", settings.ollamaReasoningModel);
+    console.log("RAG Query Generated:", ragQuery);
+    console.log("Handing over structured vision data to reasoning model...");
+
+    const finalResponse = await fetchOllamaGenerate({
+      url: configuredUrl,
+      key: apiKey,
+      model: settings.ollamaReasoningModel!,
+      prompt: reasoningPrompt,
+      images: [], // No images for reasoning model
+      stream: true,
+      think: settings.ollamaThinking,
+      ragQuery: ragQuery // Inject dynamic query based on defects
+    }, onPartial, onThinking, onMetrics);
+
+    return finalResponse.text;
+  }
+
+  // --- LEGACY / SINGLE MODEL LOGIC ---
   const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
   let promptPrefix = payload.kind === 'video'
     ? `${systemPrompt}\n\nThe user supplied a short video clip that has been converted into ${images.length} chronological frames. Analyze trends across the frames as a single scene.`
@@ -148,19 +356,42 @@ const analyzeWithOllama = async (
     promptPrefix += `\n\nCONTEXT:\nThe user has provided the following specifications for this weld:\n${materialContext.join('\n')}\n\nPlease use these specifications to grade the weld accordingly.`;
   }
 
+  const response = await fetchOllamaGenerate({
+    url: configuredUrl,
+    key: apiKey,
+    model: getOllamaModel(settings),
+    prompt: promptPrefix,
+    images,
+    stream: true,
+    think: settings.ollamaThinking,
+    ragQuery: undefined // Use default prompt for RAG
+  }, onPartial, onThinking, onMetrics, onProgress); // Pass onProgress for RAG notifications
+
+  return response.text;
+};
+
+// Helper to handle the fetch and streaming logic
+const fetchOllamaGenerate = async (
+  params: {
+    url: string;
+    key?: string;
+    model: string;
+    prompt: string;
+    images?: string[];
+    stream?: boolean;
+    think?: boolean;
+    ragQuery?: string | null;
+  },
+  onPartial?: (text: string) => void,
+  onThinking?: (text: string) => void,
+  onMetrics?: (metrics: import("../types").OllamaMetrics) => void,
+  onProgress?: ProgressCallback
+): Promise<{ text: string }> => {
   try {
     const response = await fetch(`/api/ollama/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: configuredUrl,
-        key: apiKey || undefined,
-        model: getOllamaModel(settings),
-        prompt: promptPrefix,
-        images,
-        stream: true,
-        think: settings.ollamaThinking
-      })
+      body: JSON.stringify(params)
     });
 
     if (!response.ok) {
@@ -251,7 +482,7 @@ const analyzeWithOllama = async (
       }
     }
 
-    return acc || "No response text generated.";
+    return { text: acc || "No response text generated." };
   } catch (err: any) {
     throw new Error(err?.message || 'Ollama request failed.');
   }

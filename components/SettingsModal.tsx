@@ -393,6 +393,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
                 )}
+
+                <div className="space-y-4 pt-2 border-t border-zinc-800/50">
+                  <div className="space-y-2">
+                    <label className="text-sm text-zinc-300 flex items-center gap-2">
+                      <span>Reasoning Model</span>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">Pipeline Active</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.ollamaReasoningModel || ''}
+                      onChange={(e) => handleChange('ollamaReasoningModel', e.target.value)}
+                      placeholder="e.g. kimi-k2:1t-cloud"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
+                    />
+                    <p className="text-[10px] text-zinc-500">
+                      Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="pt-2">
                   <a 
                     href="https://ollama.com/settings" 

@@ -56,6 +56,7 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     });
     const model = resolveModel(payload?.model, env.OLLAMA_MODEL);
     let prompt = payload?.prompt || "";
+    const ragQuery = payload?.ragQuery; // Optional: Specific query for RAG
     const images: string[] | undefined = payload?.images;
     const stream = Boolean(payload?.stream);
     const think = Boolean(payload?.think);
@@ -67,28 +68,32 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     let ragChunkCount = 0;
 
     // RAG: If we have a DB and embeddings, try to augment the prompt
-    if (env.USERS_DB && prompt.length > 10) {
+    // We use ragQuery if provided, otherwise fall back to prompt (unless ragQuery is explicitly null/false to disable)
+    const textToEmbed = ragQuery !== undefined ? ragQuery : prompt;
+    const shouldRunRag = env.USERS_DB && textToEmbed && textToEmbed.length > 2 && ragQuery !== null;
+
+    if (shouldRunRag) {
       try {
         let queryEmbedding: number[] | null = null;
 
         // 1. Generate embedding for the query
         if (env.AI) {
-          console.log("[RAG] Generating embedding via Cloudflare AI...");
+          console.log(`[RAG] Generating embedding via Cloudflare AI for query: "${textToEmbed.slice(0, 50)}..."`);
           const { data } = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-            text: [prompt.slice(0, 500)]
+            text: [textToEmbed.slice(0, 500)]
           });
           if (data && data[0]) {
             queryEmbedding = data[0];
             console.log("[RAG] Embedding generated successfully.");
           }
         } else if (env.OLLAMA_URL) {
-          console.log("[RAG] Generating embedding via Ollama...");
+          console.log(`[RAG] Generating embedding via Ollama for query: "${textToEmbed.slice(0, 50)}..."`);
           const embeddingModel = env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text";
           queryEmbedding = await generateEmbedding({
             baseUrl,
             apiKey,
             model: embeddingModel,
-            prompt: prompt.slice(0, 500)
+            prompt: textToEmbed.slice(0, 500)
           });
         }
 

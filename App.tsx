@@ -74,6 +74,10 @@ export default function App() {
     if (!merged.ollamaModel) {
       merged.ollamaModel = DEFAULT_SETTINGS.ollamaModel;
     }
+    // Ensure reasoning model is set if it was previously empty (migration)
+    if (!merged.ollamaReasoningModel) {
+      merged.ollamaReasoningModel = DEFAULT_SETTINGS.ollamaReasoningModel;
+    }
     if (!merged.systemPrompt) {
       merged.systemPrompt = DEFAULT_SYSTEM_PROMPT;
     }
@@ -519,6 +523,9 @@ export default function App() {
     setAnalysisProgress({ phase: 'preparing-media', message: 'Preparing upload...' });
     setProgressLog(['Preparing your media...']);
     addDebugLog('Starting analysis...');
+    
+    console.log("--- Starting Analysis ---");
+    console.log("Active Settings:", settings);
 
     try {
       // If signed out, force empty key to ensure backend uses demo key

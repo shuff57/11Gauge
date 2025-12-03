@@ -10,7 +10,8 @@ export interface AppSettings {
   geminiModel: string;
   openaiKey: string;
   ollamaUrl: string;
-  ollamaModel: string;
+  ollamaModel: string; // Legacy/Single model
+  ollamaReasoningModel?: string; // Step 2: Reasoning/Scoring
   ollamaKey: string;
   geminiKeyId?: number | null;
   openaiKeyId?: number | null;
