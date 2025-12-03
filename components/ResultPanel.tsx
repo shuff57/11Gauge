@@ -79,7 +79,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reaso
         <details className="mb-6 group">
           <summary className="flex items-center gap-2 text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-300 select-none list-none">
             <BrainCircuit className="w-4 h-4" />
-            <span>Reasoning Process</span>
+            <span>Visual Analysis</span>
             <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 group-open:hidden">Show</span>
             <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 hidden group-open:inline">Hide</span>
           </summary>

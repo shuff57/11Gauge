@@ -895,7 +895,7 @@ var onRequest10 = /* @__PURE__ */ __name2(async (context) => {
     const ragQuery = payload?.ragQuery;
     const images = payload?.images;
     const stream = Boolean(payload?.stream);
-    const think = Boolean(payload?.think);
+    const think = payload?.think;
     if (!prompt && (!images || images.length === 0)) {
       throw new Error("Prompt or images are required.");
     }

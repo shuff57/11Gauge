@@ -64,7 +64,7 @@ interface ForwardOptions {
   prompt: string;
   images?: string[];
   stream?: boolean;
-  think?: boolean;
+  think?: boolean | string;
 }
 
 const forwardToOllama = async (opts: ForwardOptions): Promise<Response> => {

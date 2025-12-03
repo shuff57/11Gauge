@@ -17,6 +17,7 @@ export interface AppSettings {
   openaiKeyId?: number | null;
   ollamaKeyId?: number | null;
   ollamaThinking?: boolean;
+  ollamaThinkingLevel?: 'low' | 'medium' | 'high';
   systemPrompt?: string | null;
   materialType?: string;
   weldProcess?: string;

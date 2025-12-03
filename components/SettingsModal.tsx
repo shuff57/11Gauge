@@ -398,22 +398,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="space-y-2">
                     <label className="text-sm text-zinc-300 flex items-center gap-2">
                       <span>Reasoning Model</span>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">Pipeline Active</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={settings.ollamaReasoningModel || ''}
                       onChange={(e) => handleChange('ollamaReasoningModel', e.target.value)}
-                      placeholder="e.g. kimi-k2:1t-cloud"
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-600"
-                    />
-                    <p className="text-[10px] text-zinc-500">
-                      Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
-                    </p>
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                    >
+                      <option value="gpt-oss:20b-cloud">gpt-oss:20b-cloud</option>
+                      <option value="kimi-k2:1t-cloud">kimi-k2:1t-cloud</option>
+                      <option value="gpt-oss:120b-cloud">gpt-oss:120b-cloud</option>
+                      <option value="deepseek-v3.1:671b-cloud">deepseek-v3.1:671b-cloud</option>
+                      <option value="gemini-3-pro-preview:latest">gemini-3-pro-preview:latest</option>
+                    </select>
                   </div>
+                </div>
+                
+                <div className="pt-2">
+                  {settings.ollamaReasoningModel?.includes('gpt-oss') ? (
+                    <div className="space-y-2">
+                      <label className="text-sm text-zinc-300">Thinking Level (GPT-OSS)</label>
+                      <select
+                        value={settings.ollamaThinkingLevel || 'low'}
+                        onChange={(e) => handleChange('ollamaThinkingLevel', e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="ollamaThinking"
+                        checked={settings.ollamaThinking ?? true}
+                        onChange={(e) => handleChange('ollamaThinking', e.target.checked)}
+                        className="rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-blue-500/20"
+                      />
+                      <label htmlFor="ollamaThinking" className="text-sm text-zinc-300 select-none cursor-pointer">
+                        Enable Thinking (Reasoning Trace)
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2">
+                  <p className="text-[10px] text-zinc-500 mb-2">
+                    Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
+                  </p>
                   <a 
                     href="https://ollama.com/settings" 
                     target="_blank" 
@@ -423,18 +456,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     View Usage & Account Settings (Ollama Cloud)
                     <ExternalLink className="w-3 h-3" />
                   </a>
-                </div>
-                <div className="pt-2 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="ollamaThinking"
-                    checked={settings.ollamaThinking ?? false}
-                    onChange={(e) => handleChange('ollamaThinking', e.target.checked)}
-                    className="rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-blue-500/20"
-                  />
-                  <label htmlFor="ollamaThinking" className="text-sm text-zinc-300 select-none cursor-pointer">
-                    Enable Thinking (Reasoning Trace)
-                  </label>
                 </div>
               </>
             )}

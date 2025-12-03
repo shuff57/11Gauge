@@ -923,7 +923,7 @@ var onRequest10 = /* @__PURE__ */ __name(async (context) => {
     const ragQuery = payload?.ragQuery;
     const images = payload?.images;
     const stream = Boolean(payload?.stream);
-    const think = Boolean(payload?.think);
+    const think = payload?.think;
     if (!prompt && (!images || images.length === 0)) {
       throw new Error("Prompt or images are required.");
     }
@@ -1785,11 +1785,13 @@ var DEFAULT_SETTINGS = {
   openaiKey: "",
   ollamaUrl: defaultOllamaUrl,
   ollamaModel: defaultOllamaModel,
-  ollamaReasoningModel: "kimi-k2:1t-cloud",
+  ollamaReasoningModel: "gpt-oss:20b-cloud",
   ollamaKey: defaultOllamaKey,
   geminiKeyId: null,
   openaiKeyId: null,
   ollamaKeyId: null,
+  ollamaThinking: true,
+  ollamaThinkingLevel: "low",
   systemPrompt: null
 };
 var MODEL_LABELS = {
@@ -2430,7 +2432,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-SCqpXm/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-rGRdH6/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2462,7 +2464,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-SCqpXm/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-rGRdH6/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

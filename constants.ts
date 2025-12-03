@@ -75,11 +75,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openaiKey: '',
   ollamaUrl: defaultOllamaUrl,
   ollamaModel: defaultOllamaModel,
-  ollamaReasoningModel: 'kimi-k2:1t-cloud',
+  ollamaReasoningModel: 'gpt-oss:20b-cloud',
   ollamaKey: defaultOllamaKey,
   geminiKeyId: null,
   openaiKeyId: null,
   ollamaKeyId: null,
+  ollamaThinking: true,
+  ollamaThinkingLevel: 'low',
   systemPrompt: null,
 };
 

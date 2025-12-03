@@ -1,10 +1,12 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// utils/session.ts
+// .wrangler/tmp/pages-ghOS8m/functionsWorker-0.3236396460498481.mjs
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var SESSION_COOKIE_NAME = "11g_session";
 var SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-var parseCookies = /* @__PURE__ */ __name((header) => {
+var parseCookies = /* @__PURE__ */ __name2((header) => {
   if (!header) return {};
   return header.split(";").reduce((acc, part) => {
     const [key, ...rest] = part.trim().split("=");
@@ -13,7 +15,7 @@ var parseCookies = /* @__PURE__ */ __name((header) => {
     return acc;
   }, {});
 }, "parseCookies");
-var buildSessionCookie = /* @__PURE__ */ __name((token, options) => {
+var buildSessionCookie = /* @__PURE__ */ __name2((token, options) => {
   const parts = [`${SESSION_COOKIE_NAME}=${token ? encodeURIComponent(token) : ""}`];
   parts.push("Path=/");
   if (token) {
@@ -28,7 +30,7 @@ var buildSessionCookie = /* @__PURE__ */ __name((token, options) => {
   parts.push("HttpOnly");
   return parts.join("; ");
 }, "buildSessionCookie");
-var createSession = /* @__PURE__ */ __name(async (env, userId) => {
+var createSession = /* @__PURE__ */ __name2(async (env, userId) => {
   if (!env.USERS_DB) return null;
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   const createdAt = /* @__PURE__ */ new Date();
@@ -38,16 +40,16 @@ var createSession = /* @__PURE__ */ __name(async (env, userId) => {
   ).bind(userId, token, createdAt.toISOString(), expiresAt.toISOString()).run();
   return token;
 }, "createSession");
-var deleteSession = /* @__PURE__ */ __name(async (env, token) => {
+var deleteSession = /* @__PURE__ */ __name2(async (env, token) => {
   if (!env.USERS_DB) return;
   await env.USERS_DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
 }, "deleteSession");
-var getSessionToken = /* @__PURE__ */ __name((request) => {
+var getSessionToken = /* @__PURE__ */ __name2((request) => {
   const cookieHeader = request.headers.get("Cookie");
   const cookies = parseCookies(cookieHeader);
   return cookies[SESSION_COOKIE_NAME] || null;
 }, "getSessionToken");
-var getSessionUser = /* @__PURE__ */ __name(async (env, request) => {
+var getSessionUser = /* @__PURE__ */ __name2(async (env, request) => {
   if (!env.USERS_DB) return null;
   const token = getSessionToken(request);
   if (!token) return null;
@@ -61,9 +63,7 @@ var getSessionUser = /* @__PURE__ */ __name(async (env, request) => {
   if (!session || !session.email) return null;
   return { id: session.user_id, email: session.email };
 }, "getSessionUser");
-
-// api/auth/google/callback.ts
-var onRequest = /* @__PURE__ */ __name(async (context) => {
+var onRequest = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
   const secure = request.url.startsWith("https://");
@@ -163,15 +163,13 @@ var onRequest = /* @__PURE__ */ __name(async (context) => {
     return Response.redirect(redirectUrl.toString(), 302);
   }
 }, "onRequest");
-
-// utils/examples.ts
-var requireDb = /* @__PURE__ */ __name((env) => {
+var requireDb = /* @__PURE__ */ __name2((env) => {
   if (!env.USERS_DB) {
     throw new Error("USERS_DB binding is not configured.");
   }
   return env.USERS_DB;
 }, "requireDb");
-var mapRow = /* @__PURE__ */ __name((row) => {
+var mapRow = /* @__PURE__ */ __name2((row) => {
   if (!row) return null;
   return {
     id: String(row.id),
@@ -191,7 +189,7 @@ var mapRow = /* @__PURE__ */ __name((row) => {
     weld_position: row.weld_position ?? null
   };
 }, "mapRow");
-var createExampleImageRecord = /* @__PURE__ */ __name(async (env, input) => {
+var createExampleImageRecord = /* @__PURE__ */ __name2(async (env, input) => {
   const db = requireDb(env);
   await db.prepare(
     `INSERT INTO example_images (
@@ -224,7 +222,7 @@ var createExampleImageRecord = /* @__PURE__ */ __name(async (env, input) => {
   }
   return record;
 }, "createExampleImageRecord");
-var listExampleImageRecords = /* @__PURE__ */ __name(async (env, label) => {
+var listExampleImageRecords = /* @__PURE__ */ __name2(async (env, label) => {
   const db = requireDb(env);
   const base = `SELECT * FROM example_images`;
   const filter = label ? " WHERE label = ?" : "";
@@ -233,18 +231,18 @@ var listExampleImageRecords = /* @__PURE__ */ __name(async (env, label) => {
   const rows = label ? await db.prepare(statement).bind(label).all() : await db.prepare(statement).all();
   return Array.isArray(rows.results) ? rows.results.map(mapRow).filter((record) => Boolean(record)) : [];
 }, "listExampleImageRecords");
-var getExampleImageRecord = /* @__PURE__ */ __name(async (env, id) => {
+var getExampleImageRecord = /* @__PURE__ */ __name2(async (env, id) => {
   const db = requireDb(env);
   const row = await db.prepare(
     `SELECT * FROM example_images WHERE id = ?`
   ).bind(id).first();
   return mapRow(row || void 0);
 }, "getExampleImageRecord");
-var deleteExampleImageRecord = /* @__PURE__ */ __name(async (env, id) => {
+var deleteExampleImageRecord = /* @__PURE__ */ __name2(async (env, id) => {
   const db = requireDb(env);
   await db.prepare("DELETE FROM example_images WHERE id = ?").bind(id).run();
 }, "deleteExampleImageRecord");
-var createExampleImageChunk = /* @__PURE__ */ __name(async (env, imageId, textContent, embedding) => {
+var createExampleImageChunk = /* @__PURE__ */ __name2(async (env, imageId, textContent, embedding) => {
   const db = requireDb(env);
   const id = crypto.randomUUID();
   const createdAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -254,7 +252,7 @@ var createExampleImageChunk = /* @__PURE__ */ __name(async (env, imageId, textCo
      VALUES (?, ?, ?, ?, ?)`
   ).bind(id, imageId, textContent, embeddingJson, createdAt).run();
 }, "createExampleImageChunk");
-var toExampleImageSummary = /* @__PURE__ */ __name((record) => ({
+var toExampleImageSummary = /* @__PURE__ */ __name2((record) => ({
   id: record.id,
   label: record.label,
   title: record.title,
@@ -269,9 +267,7 @@ var toExampleImageSummary = /* @__PURE__ */ __name((record) => ({
   jointType: record.joint_type,
   weldPosition: record.weld_position
 }), "toExampleImageSummary");
-
-// api/examples/[id]/image.ts
-var onRequest2 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest2 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
@@ -300,9 +296,7 @@ var onRequest2 = /* @__PURE__ */ __name(async ({ request, env }) => {
     }
   });
 }, "onRequest");
-
-// utils/sources.ts
-var mapRow2 = /* @__PURE__ */ __name((row) => {
+var mapRow2 = /* @__PURE__ */ __name2((row) => {
   if (!row) return null;
   return {
     id: String(row.id),
@@ -318,13 +312,13 @@ var mapRow2 = /* @__PURE__ */ __name((row) => {
     created_at: String(row.created_at)
   };
 }, "mapRow");
-var requireDb2 = /* @__PURE__ */ __name((env) => {
+var requireDb2 = /* @__PURE__ */ __name2((env) => {
   if (!env.USERS_DB) {
     throw new Error("USERS_DB binding is not configured.");
   }
   return env.USERS_DB;
 }, "requireDb");
-var createPrimarySourceRecord = /* @__PURE__ */ __name(async (env, input) => {
+var createPrimarySourceRecord = /* @__PURE__ */ __name2(async (env, input) => {
   const db = requireDb2(env);
   await db.prepare(
     `INSERT INTO primary_sources (
@@ -351,7 +345,7 @@ var createPrimarySourceRecord = /* @__PURE__ */ __name(async (env, input) => {
   }
   return record;
 }, "createPrimarySourceRecord");
-var listPrimarySourceRecords = /* @__PURE__ */ __name(async (env, userId) => {
+var listPrimarySourceRecords = /* @__PURE__ */ __name2(async (env, userId) => {
   const db = requireDb2(env);
   const rows = await db.prepare(
     `SELECT * FROM primary_sources
@@ -360,18 +354,18 @@ var listPrimarySourceRecords = /* @__PURE__ */ __name(async (env, userId) => {
   ).bind(userId).all();
   return Array.isArray(rows.results) ? rows.results.map(mapRow2).filter((record) => Boolean(record)) : [];
 }, "listPrimarySourceRecords");
-var getPrimarySourceRecord = /* @__PURE__ */ __name(async (env, userId, sourceId) => {
+var getPrimarySourceRecord = /* @__PURE__ */ __name2(async (env, userId, sourceId) => {
   const db = requireDb2(env);
   const row = await db.prepare(
     `SELECT * FROM primary_sources WHERE id = ? AND user_id = ?`
   ).bind(sourceId, userId).first();
   return mapRow2(row || void 0);
 }, "getPrimarySourceRecord");
-var deletePrimarySourceRecord = /* @__PURE__ */ __name(async (env, sourceId) => {
+var deletePrimarySourceRecord = /* @__PURE__ */ __name2(async (env, sourceId) => {
   const db = requireDb2(env);
   await db.prepare("DELETE FROM primary_sources WHERE id = ?").bind(sourceId).run();
 }, "deletePrimarySourceRecord");
-var toPrimarySourceSummary = /* @__PURE__ */ __name((record) => ({
+var toPrimarySourceSummary = /* @__PURE__ */ __name2((record) => ({
   id: record.id,
   title: record.title,
   originalName: record.original_name,
@@ -380,9 +374,7 @@ var toPrimarySourceSummary = /* @__PURE__ */ __name((record) => ({
   chunkCount: record.chunk_count,
   createdAt: record.created_at
 }), "toPrimarySourceSummary");
-
-// api/sources/[id]/chunks.ts
-var onRequest3 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   if (request.method !== "GET") {
     return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET" } });
   }
@@ -436,13 +428,11 @@ var onRequest3 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
     });
   }
 }, "onRequest");
-
-// utils/admin.ts
-var parseAdminEmails = /* @__PURE__ */ __name((raw) => {
+var parseAdminEmails = /* @__PURE__ */ __name2((raw) => {
   if (!raw) return [];
   return raw.split(/[,\n;]/).map((value) => value.trim().toLowerCase()).filter(Boolean);
 }, "parseAdminEmails");
-var isAdminEmail = /* @__PURE__ */ __name(async (env, email) => {
+var isAdminEmail = /* @__PURE__ */ __name2(async (env, email) => {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   if (!normalized) return false;
@@ -458,22 +448,20 @@ var isAdminEmail = /* @__PURE__ */ __name(async (env, email) => {
   }
   return false;
 }, "isAdminEmail");
-var withAdminFlag = /* @__PURE__ */ __name(async (env, user) => {
+var withAdminFlag = /* @__PURE__ */ __name2(async (env, user) => {
   return {
     ...user,
     isAdmin: await isAdminEmail(env, user.email)
   };
 }, "withAdminFlag");
-
-// api/admin/users.ts
-var json = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest4 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest4 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json({ error: "Not authenticated" }, { status: 401 });
@@ -492,7 +480,7 @@ var onRequest4 = /* @__PURE__ */ __name(async ({ request, env }) => {
   }
   return new Response("Method Not Allowed", { status: 405 });
 }, "onRequest");
-var handleList = /* @__PURE__ */ __name(async (env) => {
+var handleList = /* @__PURE__ */ __name2(async (env) => {
   try {
     const { results } = await env.USERS_DB.prepare("SELECT email, created_at FROM admin_allowlist ORDER BY created_at DESC").all();
     const envAdmins = (env.ADMIN_EMAILS || "").split(/[,\n;]/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -508,7 +496,7 @@ var handleList = /* @__PURE__ */ __name(async (env) => {
     return json({ error: err.message }, { status: 500 });
   }
 }, "handleList");
-var handleAdd = /* @__PURE__ */ __name(async (request, env) => {
+var handleAdd = /* @__PURE__ */ __name2(async (request, env) => {
   try {
     const { email } = await request.json();
     if (!email || typeof email !== "string") {
@@ -523,7 +511,7 @@ var handleAdd = /* @__PURE__ */ __name(async (request, env) => {
     return json({ error: err.message }, { status: 500 });
   }
 }, "handleAdd");
-var handleRemove = /* @__PURE__ */ __name(async (request, env) => {
+var handleRemove = /* @__PURE__ */ __name2(async (request, env) => {
   try {
     const { email } = await request.json();
     if (!email || typeof email !== "string") {
@@ -542,9 +530,7 @@ var handleRemove = /* @__PURE__ */ __name(async (request, env) => {
     return json({ error: err.message }, { status: 500 });
   }
 }, "handleRemove");
-
-// api/auth/google.ts
-var onRequest5 = /* @__PURE__ */ __name(async (context) => {
+var onRequest5 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   const reqUrl = new URL(request.url);
   const returnToParam = reqUrl.searchParams.get("return_to");
@@ -567,39 +553,35 @@ var onRequest5 = /* @__PURE__ */ __name(async (context) => {
   console.log("[Google OAuth] Redirecting to Google with state", stateObj);
   return Response.redirect(googleAuthUrl.toString(), 302);
 }, "onRequest");
-
-// api/auth/me.ts
-var json2 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json2 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest6 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest6 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json2({ user: null }, { status: 401 });
   }
   return json2({ user: await withAdminFlag(env, user) });
 }, "onRequest");
-
-// api/auth/signin.ts
-var json3 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json3 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var hashPassword = /* @__PURE__ */ __name(async (password) => {
+var hashPassword = /* @__PURE__ */ __name2(async (password) => {
   const encoder2 = new TextEncoder();
   const data = encoder2.encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }, "hashPassword");
-var onRequest7 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest7 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   console.log("[Auth] Request received");
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -662,9 +644,7 @@ var onRequest7 = /* @__PURE__ */ __name(async ({ request, env }) => {
     return json3({ error: "Authentication failed" }, { status: 500 });
   }
 }, "onRequest");
-
-// api/auth/signout.ts
-var onRequest8 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest8 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const token = getSessionToken(request);
   if (token) {
     await deleteSession(env, token);
@@ -677,17 +657,15 @@ var onRequest8 = /* @__PURE__ */ __name(async ({ request, env }) => {
     }
   });
 }, "onRequest");
-
-// utils/crypto.ts
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
-var base64Encode = /* @__PURE__ */ __name((buffer) => {
+var base64Encode = /* @__PURE__ */ __name2((buffer) => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = "";
   bytes.forEach((b) => binary += String.fromCharCode(b));
   return btoa(binary);
 }, "base64Encode");
-var base64Decode = /* @__PURE__ */ __name((input) => {
+var base64Decode = /* @__PURE__ */ __name2((input) => {
   const binary = atob(input);
   const len = binary.length;
   const bytes = new Uint8Array(len);
@@ -696,11 +674,11 @@ var base64Decode = /* @__PURE__ */ __name((input) => {
   }
   return bytes;
 }, "base64Decode");
-var deriveKey = /* @__PURE__ */ __name(async (secret) => {
+var deriveKey = /* @__PURE__ */ __name2(async (secret) => {
   const hashed = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
   return crypto.subtle.importKey("raw", hashed, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }, "deriveKey");
-var encryptText = /* @__PURE__ */ __name(async (plainText, secret) => {
+var encryptText = /* @__PURE__ */ __name2(async (plainText, secret) => {
   if (!secret) throw new Error("Missing encryption secret");
   const key = await deriveKey(secret);
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -710,7 +688,7 @@ var encryptText = /* @__PURE__ */ __name(async (plainText, secret) => {
   payload.set(new Uint8Array(ciphertext), iv.byteLength);
   return base64Encode(payload);
 }, "encryptText");
-var decryptText = /* @__PURE__ */ __name(async (payload, secret) => {
+var decryptText = /* @__PURE__ */ __name2(async (payload, secret) => {
   if (!secret || !payload) return null;
   const key = await deriveKey(secret);
   const bytes = base64Decode(payload);
@@ -725,18 +703,16 @@ var decryptText = /* @__PURE__ */ __name(async (payload, secret) => {
     return null;
   }
 }, "decryptText");
-
-// api/keys/ollama.ts
 var PROVIDER = "ollama";
 var DEFAULT_LABEL = "Default";
-var json4 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json4 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest9 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest9 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const sessionUser = await getSessionUser(env, request);
   const secret = env.OLLAMA_KEY_SECRET;
   if (request.method === "POST") {
@@ -803,10 +779,8 @@ var onRequest9 = /* @__PURE__ */ __name(async ({ request, env }) => {
     headers: { Allow: "POST, DELETE" }
   });
 }, "onRequest");
-
-// utils/ollama.ts
 var CLOUD_VISION_MODEL = "qwen3-vl:235b-instruct-cloud";
-var normalizeUrl = /* @__PURE__ */ __name((value) => {
+var normalizeUrl = /* @__PURE__ */ __name2((value) => {
   if (!value) return "";
   let clean = value.trim();
   if (!clean) return "";
@@ -816,31 +790,31 @@ var normalizeUrl = /* @__PURE__ */ __name((value) => {
   }
   return clean;
 }, "normalizeUrl");
-var resolveBaseUrl = /* @__PURE__ */ __name((provided, fallback) => {
+var resolveBaseUrl = /* @__PURE__ */ __name2((provided, fallback) => {
   const normalized = normalizeUrl(provided || fallback);
   if (!normalized) {
     throw new Error("Missing Ollama base URL.");
   }
   return normalized;
 }, "resolveBaseUrl");
-var resolveApiKey = /* @__PURE__ */ __name(async (options) => {
+var resolveApiKey = /* @__PURE__ */ __name2(async (options) => {
   const direct = (options.provided || "").trim();
   if (direct) return direct;
   const fallback = (options.fallback || "").trim();
   if (fallback) return fallback;
   return void 0;
 }, "resolveApiKey");
-var resolveModel = /* @__PURE__ */ __name((provided, fallback) => {
+var resolveModel = /* @__PURE__ */ __name2((provided, fallback) => {
   return provided?.trim() || fallback?.trim() || CLOUD_VISION_MODEL;
 }, "resolveModel");
-var buildHeaders = /* @__PURE__ */ __name((apiKey) => {
+var buildHeaders = /* @__PURE__ */ __name2((apiKey) => {
   const headers = { "Content-Type": "application/json" };
   if (apiKey) {
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
   return headers;
 }, "buildHeaders");
-var forwardToOllama = /* @__PURE__ */ __name(async (opts) => {
+var forwardToOllama = /* @__PURE__ */ __name2(async (opts) => {
   const response = await fetch(`${opts.baseUrl}/api/generate`, {
     method: "POST",
     headers: buildHeaders(opts.apiKey),
@@ -854,7 +828,7 @@ var forwardToOllama = /* @__PURE__ */ __name(async (opts) => {
   });
   return response;
 }, "forwardToOllama");
-var relayResponse = /* @__PURE__ */ __name((response, extraHeaders) => {
+var relayResponse = /* @__PURE__ */ __name2((response, extraHeaders) => {
   const headers = new Headers(response.headers);
   headers.delete("Content-Length");
   headers.set("Content-Type", "application/x-ndjson");
@@ -866,7 +840,7 @@ var relayResponse = /* @__PURE__ */ __name((response, extraHeaders) => {
     headers
   });
 }, "relayResponse");
-var generateEmbedding = /* @__PURE__ */ __name(async (opts) => {
+var generateEmbedding = /* @__PURE__ */ __name2(async (opts) => {
   const response = await fetch(`${opts.baseUrl}/api/embeddings`, {
     method: "POST",
     headers: buildHeaders(opts.apiKey),
@@ -885,9 +859,7 @@ var generateEmbedding = /* @__PURE__ */ __name(async (opts) => {
   }
   return data.embedding;
 }, "generateEmbedding");
-
-// api/ollama/generate.ts
-var cosineSimilarity = /* @__PURE__ */ __name((a, b) => {
+var cosineSimilarity = /* @__PURE__ */ __name2((a, b) => {
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -898,7 +870,7 @@ var cosineSimilarity = /* @__PURE__ */ __name((a, b) => {
   }
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }, "cosineSimilarity");
-var onRequest10 = /* @__PURE__ */ __name(async (context) => {
+var onRequest10 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -923,7 +895,7 @@ var onRequest10 = /* @__PURE__ */ __name(async (context) => {
     const ragQuery = payload?.ragQuery;
     const images = payload?.images;
     const stream = Boolean(payload?.stream);
-    const think = Boolean(payload?.think);
+    const think = payload?.think;
     if (!prompt && (!images || images.length === 0)) {
       throw new Error("Prompt or images are required.");
     }
@@ -1013,9 +985,7 @@ ${prompt}`;
     });
   }
 }, "onRequest");
-
-// api/ollama/test.ts
-var onRequest11 = /* @__PURE__ */ __name(async (context) => {
+var onRequest11 = /* @__PURE__ */ __name2(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -1051,16 +1021,14 @@ var onRequest11 = /* @__PURE__ */ __name(async (context) => {
     });
   }
 }, "onRequest");
-
-// api/examples/[id].ts
-var json5 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json5 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest12 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest12 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const url = new URL(request.url);
   const id = url.pathname.split("/").pop();
   if (!id) {
@@ -1074,7 +1042,7 @@ var onRequest12 = /* @__PURE__ */ __name(async ({ request, env }) => {
   }
   return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, DELETE" } });
 }, "onRequest");
-var handleGet = /* @__PURE__ */ __name(async (id, request, env) => {
+var handleGet = /* @__PURE__ */ __name2(async (id, request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json5({ error: "Not authenticated" }, { status: 401 });
@@ -1090,7 +1058,7 @@ var handleGet = /* @__PURE__ */ __name(async (id, request, env) => {
     }
   });
 }, "handleGet");
-var handleDelete = /* @__PURE__ */ __name(async (id, request, env) => {
+var handleDelete = /* @__PURE__ */ __name2(async (id, request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json5({ error: "Not authenticated" }, { status: 401 });
@@ -1113,23 +1081,21 @@ var handleDelete = /* @__PURE__ */ __name(async (id, request, env) => {
   await deleteExampleImageRecord(env, id);
   return json5({ success: true });
 }, "handleDelete");
-
-// api/keys/[id].ts
-var json6 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json6 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var fetchKey = /* @__PURE__ */ __name(async (env, userId, id) => {
+var fetchKey = /* @__PURE__ */ __name2(async (env, userId, id) => {
   if (!env.USERS_DB) return null;
   const row = await env.USERS_DB.prepare(
     "SELECT id, user_id, provider, label, key_value, created_at, updated_at FROM user_keys WHERE id = ? AND user_id = ?"
   ).bind(id, userId).first();
   return row || null;
 }, "fetchKey");
-var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequest13 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   const keyId = Number(params?.id);
   if (!keyId) {
     return json6({ error: "Invalid key id" }, { status: 400 });
@@ -1221,16 +1187,14 @@ var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
     headers: { Allow: "GET, PUT, DELETE" }
   });
 }, "onRequest");
-
-// api/sources/[id].ts
-var json7 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json7 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest14 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequest14 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
   if (request.method === "GET") {
     return handleGet2(request, env, params);
   }
@@ -1239,7 +1203,7 @@ var onRequest14 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   }
   return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, DELETE" } });
 }, "onRequest");
-var handleGet2 = /* @__PURE__ */ __name(async (request, env, params) => {
+var handleGet2 = /* @__PURE__ */ __name2(async (request, env, params) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json7({ error: "Not authenticated" }, { status: 401 });
@@ -1259,7 +1223,7 @@ var handleGet2 = /* @__PURE__ */ __name(async (request, env, params) => {
     return json7({ error: "Unable to load source" }, { status: 500 });
   }
 }, "handleGet");
-var handleDelete2 = /* @__PURE__ */ __name(async (request, env, params) => {
+var handleDelete2 = /* @__PURE__ */ __name2(async (request, env, params) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json7({ error: "Not authenticated" }, { status: 401 });
@@ -1294,9 +1258,7 @@ var handleDelete2 = /* @__PURE__ */ __name(async (request, env, params) => {
     return json7({ error: "Unable to delete source" }, { status: 500 });
   }
 }, "handleDelete");
-
-// api/examples/index.ts
-var json8 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json8 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -1305,7 +1267,7 @@ var json8 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.string
 }), "json");
 var MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 var VALID_LABELS = ["good", "bad"];
-var onRequest15 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest15 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   if (request.method === "GET") {
     return handleList2(request, env);
   }
@@ -1314,7 +1276,7 @@ var onRequest15 = /* @__PURE__ */ __name(async ({ request, env }) => {
   }
   return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, POST" } });
 }, "onRequest");
-var handleList2 = /* @__PURE__ */ __name(async (request, env) => {
+var handleList2 = /* @__PURE__ */ __name2(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json8({ error: "Not authenticated" }, { status: 401 });
@@ -1334,7 +1296,7 @@ var handleList2 = /* @__PURE__ */ __name(async (request, env) => {
     return json8({ error: "Unable to load example images." }, { status: 500 });
   }
 }, "handleList");
-var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
+var handleUpload = /* @__PURE__ */ __name2(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json8({ error: "Not authenticated" }, { status: 401 });
@@ -1421,17 +1383,15 @@ var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
     return json8({ error: err?.message || "Failed to store example image." }, { status: 400 });
   }
 }, "handleUpload");
-
-// api/keys/index.ts
 var AVAILABLE_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "gemini", "openai"]);
-var json9 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json9 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var normalizeProvider = /* @__PURE__ */ __name((value) => {
+var normalizeProvider = /* @__PURE__ */ __name2((value) => {
   if (!value) throw new Error("Provider is required");
   const normalized = value.trim().toLowerCase();
   if (!AVAILABLE_PROVIDERS.has(normalized)) {
@@ -1439,7 +1399,7 @@ var normalizeProvider = /* @__PURE__ */ __name((value) => {
   }
   return normalized;
 }, "normalizeProvider");
-var sanitizeLabel = /* @__PURE__ */ __name((value) => {
+var sanitizeLabel = /* @__PURE__ */ __name2((value) => {
   const trimmed = (value || "").trim();
   if (!trimmed) {
     throw new Error("Label is required");
@@ -1449,7 +1409,7 @@ var sanitizeLabel = /* @__PURE__ */ __name((value) => {
   }
   return trimmed;
 }, "sanitizeLabel");
-var summarizeRow = /* @__PURE__ */ __name(async (row, secret) => {
+var summarizeRow = /* @__PURE__ */ __name2(async (row, secret) => {
   const decrypted = await decryptText(row.key_value, secret);
   return {
     id: row.id,
@@ -1460,7 +1420,7 @@ var summarizeRow = /* @__PURE__ */ __name(async (row, secret) => {
     lastFour: decrypted ? decrypted.slice(-4) : null
   };
 }, "summarizeRow");
-var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest16 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const sessionUser = await getSessionUser(env, request);
   if (!sessionUser || !env.USERS_DB) {
     return json9({ error: "Not authenticated" }, { status: 401 });
@@ -1519,16 +1479,14 @@ var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
     headers: { Allow: "GET, POST" }
   });
 }, "onRequest");
-
-// api/sources/index.ts
-var json10 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json10 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var validateManifest = /* @__PURE__ */ __name((manifest, fallbackTitle) => {
+var validateManifest = /* @__PURE__ */ __name2((manifest, fallbackTitle) => {
   const title = (manifest.title || fallbackTitle || "").trim();
   if (!title) {
     throw new Error("A document title is required.");
@@ -1561,16 +1519,16 @@ var validateManifest = /* @__PURE__ */ __name((manifest, fallbackTitle) => {
     version: manifest.version || 1
   };
 }, "validateManifest");
-var toHex = /* @__PURE__ */ __name((buffer) => {
+var toHex = /* @__PURE__ */ __name2((buffer) => {
   return Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }, "toHex");
-var computeDigest = /* @__PURE__ */ __name(async (chunks) => {
+var computeDigest = /* @__PURE__ */ __name2(async (chunks) => {
   const encoder2 = new TextEncoder();
   const payload = chunks.map((chunk) => chunk.text).join("\n\n");
   const hash = await crypto.subtle.digest("SHA-256", encoder2.encode(payload));
   return toHex(hash);
 }, "computeDigest");
-var onRequest17 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest17 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   if (request.method === "GET") {
     return handleList3(request, env);
   }
@@ -1579,7 +1537,7 @@ var onRequest17 = /* @__PURE__ */ __name(async ({ request, env }) => {
   }
   return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, POST" } });
 }, "onRequest");
-var handleList3 = /* @__PURE__ */ __name(async (request, env) => {
+var handleList3 = /* @__PURE__ */ __name2(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json10({ error: "Not authenticated" }, { status: 401 });
@@ -1593,7 +1551,7 @@ var handleList3 = /* @__PURE__ */ __name(async (request, env) => {
     return json10({ error: "Unable to load primary sources." }, { status: 500 });
   }
 }, "handleList");
-var handleUpload2 = /* @__PURE__ */ __name(async (request, env) => {
+var handleUpload2 = /* @__PURE__ */ __name2(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
     return json10({ error: "Not authenticated" }, { status: 401 });
@@ -1714,8 +1672,6 @@ var handleUpload2 = /* @__PURE__ */ __name(async (request, env) => {
     return json10({ error: err?.message || "Failed to store primary source." }, { status: 400 });
   }
 }, "handleUpload");
-
-// ../constants.ts
 var DEFAULT_SYSTEM_PROMPT = `You are a strict Certified Welding Inspector (CWI) and expert instructor.
 
 Your role is to evaluate welding practice results with high standards. You must identify every flaw and grade conservatively. A "perfect score" is reserved only for X-ray quality, code-compliant welds.
@@ -1776,30 +1732,7 @@ var nodeEnv = typeof process !== "undefined" ? process.env : void 0;
 var defaultOllamaUrl = nodeEnv?.OLLAMA_URL || "";
 var defaultCloudVisionModel = "qwen3-vl:235b-instruct-cloud";
 var defaultOllamaModel = nodeEnv?.OLLAMA_MODEL || defaultCloudVisionModel;
-var defaultOllamaKey = "";
-var defaultGeminiKey = "";
-var DEFAULT_SETTINGS = {
-  provider: "OLLAMA" /* OLLAMA */,
-  geminiKey: defaultGeminiKey,
-  geminiModel: "gemini-2.5-flash",
-  openaiKey: "",
-  ollamaUrl: defaultOllamaUrl,
-  ollamaModel: defaultOllamaModel,
-  ollamaReasoningModel: "kimi-k2:1t-cloud",
-  ollamaKey: defaultOllamaKey,
-  geminiKeyId: null,
-  openaiKeyId: null,
-  ollamaKeyId: null,
-  systemPrompt: null
-};
-var MODEL_LABELS = {
-  ["GEMINI" /* GEMINI */]: "Google (Gemini)",
-  ["OPENAI" /* OPENAI */]: "OpenAI (ChatGPT)",
-  ["OLLAMA" /* OLLAMA */]: "Ollama (OpenSource)"
-};
-
-// api/system-prompt.ts
-var onRequest18 = /* @__PURE__ */ __name(async ({ env }) => {
+var onRequest18 = /* @__PURE__ */ __name2(async ({ env }) => {
   const prompt = env.SYSTEM_PROMPT?.trim() || DEFAULT_SYSTEM_PROMPT;
   return new Response(
     JSON.stringify({ prompt }),
@@ -1812,8 +1745,6 @@ var onRequest18 = /* @__PURE__ */ __name(async ({ env }) => {
     }
   );
 }, "onRequest");
-
-// ../.wrangler/tmp/pages-ucmaWV/functionsRoutes-0.5418972117353009.mjs
 var routes = [
   {
     routePath: "/api/auth/google/callback",
@@ -1942,8 +1873,6 @@ var routes = [
     modules: [onRequest18]
   }
 ];
-
-// ../node_modules/wrangler/node_modules/path-to-regexp/dist.es2015/index.js
 function lexer(str) {
   var tokens = [];
   var i = 0;
@@ -2028,6 +1957,7 @@ function lexer(str) {
   return tokens;
 }
 __name(lexer, "lexer");
+__name2(lexer, "lexer");
 function parse(str, options) {
   if (options === void 0) {
     options = {};
@@ -2038,18 +1968,18 @@ function parse(str, options) {
   var key = 0;
   var i = 0;
   var path = "";
-  var tryConsume = /* @__PURE__ */ __name(function(type) {
+  var tryConsume = /* @__PURE__ */ __name2(function(type) {
     if (i < tokens.length && tokens[i].type === type)
       return tokens[i++].value;
   }, "tryConsume");
-  var mustConsume = /* @__PURE__ */ __name(function(type) {
+  var mustConsume = /* @__PURE__ */ __name2(function(type) {
     var value2 = tryConsume(type);
     if (value2 !== void 0)
       return value2;
     var _a2 = tokens[i], nextType = _a2.type, index = _a2.index;
     throw new TypeError("Unexpected ".concat(nextType, " at ").concat(index, ", expected ").concat(type));
   }, "mustConsume");
-  var consumeText = /* @__PURE__ */ __name(function() {
+  var consumeText = /* @__PURE__ */ __name2(function() {
     var result2 = "";
     var value2;
     while (value2 = tryConsume("CHAR") || tryConsume("ESCAPED_CHAR")) {
@@ -2057,7 +1987,7 @@ function parse(str, options) {
     }
     return result2;
   }, "consumeText");
-  var isSafe = /* @__PURE__ */ __name(function(value2) {
+  var isSafe = /* @__PURE__ */ __name2(function(value2) {
     for (var _i = 0, delimiter_1 = delimiter; _i < delimiter_1.length; _i++) {
       var char2 = delimiter_1[_i];
       if (value2.indexOf(char2) > -1)
@@ -2065,7 +1995,7 @@ function parse(str, options) {
     }
     return false;
   }, "isSafe");
-  var safePattern = /* @__PURE__ */ __name(function(prefix2) {
+  var safePattern = /* @__PURE__ */ __name2(function(prefix2) {
     var prev = result[result.length - 1];
     var prevText = prefix2 || (prev && typeof prev === "string" ? prev : "");
     if (prev && !prevText) {
@@ -2128,12 +2058,14 @@ function parse(str, options) {
   return result;
 }
 __name(parse, "parse");
+__name2(parse, "parse");
 function match(str, options) {
   var keys = [];
   var re = pathToRegexp(str, keys, options);
   return regexpToFunction(re, keys, options);
 }
 __name(match, "match");
+__name2(match, "match");
 function regexpToFunction(re, keys, options) {
   if (options === void 0) {
     options = {};
@@ -2147,7 +2079,7 @@ function regexpToFunction(re, keys, options) {
       return false;
     var path = m[0], index = m.index;
     var params = /* @__PURE__ */ Object.create(null);
-    var _loop_1 = /* @__PURE__ */ __name(function(i2) {
+    var _loop_1 = /* @__PURE__ */ __name2(function(i2) {
       if (m[i2] === void 0)
         return "continue";
       var key = keys[i2 - 1];
@@ -2166,14 +2098,17 @@ function regexpToFunction(re, keys, options) {
   };
 }
 __name(regexpToFunction, "regexpToFunction");
+__name2(regexpToFunction, "regexpToFunction");
 function escapeString(str) {
   return str.replace(/([.+*?=^!:${}()[\]|/\\])/g, "\\$1");
 }
 __name(escapeString, "escapeString");
+__name2(escapeString, "escapeString");
 function flags(options) {
   return options && options.sensitive ? "" : "i";
 }
 __name(flags, "flags");
+__name2(flags, "flags");
 function regexpToRegexp(path, keys) {
   if (!keys)
     return path;
@@ -2194,6 +2129,7 @@ function regexpToRegexp(path, keys) {
   return path;
 }
 __name(regexpToRegexp, "regexpToRegexp");
+__name2(regexpToRegexp, "regexpToRegexp");
 function arrayToRegexp(paths, keys, options) {
   var parts = paths.map(function(path) {
     return pathToRegexp(path, keys, options).source;
@@ -2201,10 +2137,12 @@ function arrayToRegexp(paths, keys, options) {
   return new RegExp("(?:".concat(parts.join("|"), ")"), flags(options));
 }
 __name(arrayToRegexp, "arrayToRegexp");
+__name2(arrayToRegexp, "arrayToRegexp");
 function stringToRegexp(path, keys, options) {
   return tokensToRegexp(parse(path, options), keys, options);
 }
 __name(stringToRegexp, "stringToRegexp");
+__name2(stringToRegexp, "stringToRegexp");
 function tokensToRegexp(tokens, keys, options) {
   if (options === void 0) {
     options = {};
@@ -2260,6 +2198,7 @@ function tokensToRegexp(tokens, keys, options) {
   return new RegExp(route, flags(options));
 }
 __name(tokensToRegexp, "tokensToRegexp");
+__name2(tokensToRegexp, "tokensToRegexp");
 function pathToRegexp(path, keys, options) {
   if (path instanceof RegExp)
     return regexpToRegexp(path, keys);
@@ -2268,8 +2207,7 @@ function pathToRegexp(path, keys, options) {
   return stringToRegexp(path, keys, options);
 }
 __name(pathToRegexp, "pathToRegexp");
-
-// ../node_modules/wrangler/templates/pages-template-worker.ts
+__name2(pathToRegexp, "pathToRegexp");
 var escapeRegex = /[.+?^${}()|[\]\\]/g;
 function* executeRequest(request) {
   const requestPath = new URL(request.url).pathname;
@@ -2320,13 +2258,14 @@ function* executeRequest(request) {
   }
 }
 __name(executeRequest, "executeRequest");
+__name2(executeRequest, "executeRequest");
 var pages_template_worker_default = {
   async fetch(originalRequest, env, workerContext) {
     let request = originalRequest;
     const handlerIterator = executeRequest(request);
     let data = {};
     let isFailOpen = false;
-    const next = /* @__PURE__ */ __name(async (input, init) => {
+    const next = /* @__PURE__ */ __name2(async (input, init) => {
       if (input !== void 0) {
         let url = input;
         if (typeof input === "string") {
@@ -2353,7 +2292,7 @@ var pages_template_worker_default = {
           },
           env,
           waitUntil: workerContext.waitUntil.bind(workerContext),
-          passThroughOnException: /* @__PURE__ */ __name(() => {
+          passThroughOnException: /* @__PURE__ */ __name2(() => {
             isFailOpen = true;
           }, "passThroughOnException")
         };
@@ -2381,16 +2320,14 @@ var pages_template_worker_default = {
     }
   }
 };
-var cloneResponse = /* @__PURE__ */ __name((response) => (
+var cloneResponse = /* @__PURE__ */ __name2((response) => (
   // https://fetch.spec.whatwg.org/#null-body-status
   new Response(
     [101, 204, 205, 304].includes(response.status) ? null : response.body,
     response
   )
 ), "cloneResponse");
-
-// ../node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
-var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
+var drainBody = /* @__PURE__ */ __name2(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
   } finally {
@@ -2406,8 +2343,6 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
   }
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
-
-// ../node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
 function reduceError(e) {
   return {
     name: e?.name,
@@ -2417,7 +2352,8 @@ function reduceError(e) {
   };
 }
 __name(reduceError, "reduceError");
-var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
+__name2(reduceError, "reduceError");
+var jsonError = /* @__PURE__ */ __name2(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
   } catch (e) {
@@ -2429,20 +2365,17 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
   }
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
-
-// ../.wrangler/tmp/bundle-M3FZxq/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
 ];
 var middleware_insertion_facade_default = pages_template_worker_default;
-
-// ../node_modules/wrangler/templates/middleware/common.ts
 var __facade_middleware__ = [];
 function __facade_register__(...args) {
   __facade_middleware__.push(...args.flat());
 }
 __name(__facade_register__, "__facade_register__");
+__name2(__facade_register__, "__facade_register__");
 function __facade_invokeChain__(request, env, ctx, dispatch, middlewareChain) {
   const [head, ...tail] = middlewareChain;
   const middlewareCtx = {
@@ -2454,6 +2387,7 @@ function __facade_invokeChain__(request, env, ctx, dispatch, middlewareChain) {
   return head(request, env, ctx, middlewareCtx);
 }
 __name(__facade_invokeChain__, "__facade_invokeChain__");
+__name2(__facade_invokeChain__, "__facade_invokeChain__");
 function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
   return __facade_invokeChain__(request, env, ctx, dispatch, [
     ...__facade_middleware__,
@@ -2461,16 +2395,18 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
   ]);
 }
 __name(__facade_invoke__, "__facade_invoke__");
-
-// ../.wrangler/tmp/bundle-M3FZxq/middleware-loader.entry.ts
+__name2(__facade_invoke__, "__facade_invoke__");
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
+  static {
+    __name(this, "___Facade_ScheduledController__");
+  }
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
     this.cron = cron;
     this.#noRetry = noRetry;
   }
   static {
-    __name(this, "__Facade_ScheduledController__");
+    __name2(this, "__Facade_ScheduledController__");
   }
   #noRetry;
   noRetry() {
@@ -2487,7 +2423,7 @@ function wrapExportedHandler(worker) {
   for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__) {
     __facade_register__(middleware);
   }
-  const fetchDispatcher = /* @__PURE__ */ __name(function(request, env, ctx) {
+  const fetchDispatcher = /* @__PURE__ */ __name2(function(request, env, ctx) {
     if (worker.fetch === void 0) {
       throw new Error("Handler does not export a fetch() function.");
     }
@@ -2496,7 +2432,7 @@ function wrapExportedHandler(worker) {
   return {
     ...worker,
     fetch(request, env, ctx) {
-      const dispatcher = /* @__PURE__ */ __name(function(type, init) {
+      const dispatcher = /* @__PURE__ */ __name2(function(type, init) {
         if (type === "scheduled" && worker.scheduled !== void 0) {
           const controller = new __Facade_ScheduledController__(
             Date.now(),
@@ -2512,6 +2448,7 @@ function wrapExportedHandler(worker) {
   };
 }
 __name(wrapExportedHandler, "wrapExportedHandler");
+__name2(wrapExportedHandler, "wrapExportedHandler");
 function wrapWorkerEntrypoint(klass) {
   if (__INTERNAL_WRANGLER_MIDDLEWARE__ === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__.length === 0) {
     return klass;
@@ -2520,7 +2457,7 @@ function wrapWorkerEntrypoint(klass) {
     __facade_register__(middleware);
   }
   return class extends klass {
-    #fetchDispatcher = /* @__PURE__ */ __name((request, env, ctx) => {
+    #fetchDispatcher = /* @__PURE__ */ __name2((request, env, ctx) => {
       this.env = env;
       this.ctx = ctx;
       if (super.fetch === void 0) {
@@ -2528,7 +2465,7 @@ function wrapWorkerEntrypoint(klass) {
       }
       return super.fetch(request);
     }, "#fetchDispatcher");
-    #dispatcher = /* @__PURE__ */ __name((type, init) => {
+    #dispatcher = /* @__PURE__ */ __name2((type, init) => {
       if (type === "scheduled" && super.scheduled !== void 0) {
         const controller = new __Facade_ScheduledController__(
           Date.now(),
@@ -2551,6 +2488,7 @@ function wrapWorkerEntrypoint(klass) {
   };
 }
 __name(wrapWorkerEntrypoint, "wrapWorkerEntrypoint");
+__name2(wrapWorkerEntrypoint, "wrapWorkerEntrypoint");
 var WRAPPED_ENTRY;
 if (typeof middleware_insertion_facade_default === "object") {
   WRAPPED_ENTRY = wrapExportedHandler(middleware_insertion_facade_default);
@@ -2558,8 +2496,178 @@ if (typeof middleware_insertion_facade_default === "object") {
   WRAPPED_ENTRY = wrapWorkerEntrypoint(middleware_insertion_facade_default);
 }
 var middleware_loader_entry_default = WRAPPED_ENTRY;
-export {
-  __INTERNAL_WRANGLER_MIDDLEWARE__,
-  middleware_loader_entry_default as default
+
+// node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+var drainBody2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
+  try {
+    return await middlewareCtx.next(request, env);
+  } finally {
+    try {
+      if (request.body !== null && !request.bodyUsed) {
+        const reader = request.body.getReader();
+        while (!(await reader.read()).done) {
+        }
+      }
+    } catch (e) {
+      console.error("Failed to drain the unused request body.", e);
+    }
+  }
+}, "drainBody");
+var middleware_ensure_req_body_drained_default2 = drainBody2;
+
+// node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
+function reduceError2(e) {
+  return {
+    name: e?.name,
+    message: e?.message ?? String(e),
+    stack: e?.stack,
+    cause: e?.cause === void 0 ? void 0 : reduceError2(e.cause)
+  };
+}
+__name(reduceError2, "reduceError");
+var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
+  try {
+    return await middlewareCtx.next(request, env);
+  } catch (e) {
+    const error = reduceError2(e);
+    return Response.json(error, {
+      status: 500,
+      headers: { "MF-Experimental-Error-Stack": "true" }
+    });
+  }
+}, "jsonError");
+var middleware_miniflare3_json_error_default2 = jsonError2;
+
+// .wrangler/tmp/bundle-5X338K/middleware-insertion-facade.js
+var __INTERNAL_WRANGLER_MIDDLEWARE__2 = [
+  middleware_ensure_req_body_drained_default2,
+  middleware_miniflare3_json_error_default2
+];
+var middleware_insertion_facade_default2 = middleware_loader_entry_default;
+
+// node_modules/wrangler/templates/middleware/common.ts
+var __facade_middleware__2 = [];
+function __facade_register__2(...args) {
+  __facade_middleware__2.push(...args.flat());
+}
+__name(__facade_register__2, "__facade_register__");
+function __facade_invokeChain__2(request, env, ctx, dispatch, middlewareChain) {
+  const [head, ...tail] = middlewareChain;
+  const middlewareCtx = {
+    dispatch,
+    next(newRequest, newEnv) {
+      return __facade_invokeChain__2(newRequest, newEnv, ctx, dispatch, tail);
+    }
+  };
+  return head(request, env, ctx, middlewareCtx);
+}
+__name(__facade_invokeChain__2, "__facade_invokeChain__");
+function __facade_invoke__2(request, env, ctx, dispatch, finalMiddleware) {
+  return __facade_invokeChain__2(request, env, ctx, dispatch, [
+    ...__facade_middleware__2,
+    finalMiddleware
+  ]);
+}
+__name(__facade_invoke__2, "__facade_invoke__");
+
+// .wrangler/tmp/bundle-5X338K/middleware-loader.entry.ts
+var __Facade_ScheduledController__2 = class ___Facade_ScheduledController__2 {
+  constructor(scheduledTime, cron, noRetry) {
+    this.scheduledTime = scheduledTime;
+    this.cron = cron;
+    this.#noRetry = noRetry;
+  }
+  static {
+    __name(this, "__Facade_ScheduledController__");
+  }
+  #noRetry;
+  noRetry() {
+    if (!(this instanceof ___Facade_ScheduledController__2)) {
+      throw new TypeError("Illegal invocation");
+    }
+    this.#noRetry();
+  }
 };
-//# sourceMappingURL=functionsWorker-0.6613270975542742.mjs.map
+function wrapExportedHandler2(worker) {
+  if (__INTERNAL_WRANGLER_MIDDLEWARE__2 === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__2.length === 0) {
+    return worker;
+  }
+  for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__2) {
+    __facade_register__2(middleware);
+  }
+  const fetchDispatcher = /* @__PURE__ */ __name(function(request, env, ctx) {
+    if (worker.fetch === void 0) {
+      throw new Error("Handler does not export a fetch() function.");
+    }
+    return worker.fetch(request, env, ctx);
+  }, "fetchDispatcher");
+  return {
+    ...worker,
+    fetch(request, env, ctx) {
+      const dispatcher = /* @__PURE__ */ __name(function(type, init) {
+        if (type === "scheduled" && worker.scheduled !== void 0) {
+          const controller = new __Facade_ScheduledController__2(
+            Date.now(),
+            init.cron ?? "",
+            () => {
+            }
+          );
+          return worker.scheduled(controller, env, ctx);
+        }
+      }, "dispatcher");
+      return __facade_invoke__2(request, env, ctx, dispatcher, fetchDispatcher);
+    }
+  };
+}
+__name(wrapExportedHandler2, "wrapExportedHandler");
+function wrapWorkerEntrypoint2(klass) {
+  if (__INTERNAL_WRANGLER_MIDDLEWARE__2 === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__2.length === 0) {
+    return klass;
+  }
+  for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__2) {
+    __facade_register__2(middleware);
+  }
+  return class extends klass {
+    #fetchDispatcher = /* @__PURE__ */ __name((request, env, ctx) => {
+      this.env = env;
+      this.ctx = ctx;
+      if (super.fetch === void 0) {
+        throw new Error("Entrypoint class does not define a fetch() function.");
+      }
+      return super.fetch(request);
+    }, "#fetchDispatcher");
+    #dispatcher = /* @__PURE__ */ __name((type, init) => {
+      if (type === "scheduled" && super.scheduled !== void 0) {
+        const controller = new __Facade_ScheduledController__2(
+          Date.now(),
+          init.cron ?? "",
+          () => {
+          }
+        );
+        return super.scheduled(controller);
+      }
+    }, "#dispatcher");
+    fetch(request) {
+      return __facade_invoke__2(
+        request,
+        this.env,
+        this.ctx,
+        this.#dispatcher,
+        this.#fetchDispatcher
+      );
+    }
+  };
+}
+__name(wrapWorkerEntrypoint2, "wrapWorkerEntrypoint");
+var WRAPPED_ENTRY2;
+if (typeof middleware_insertion_facade_default2 === "object") {
+  WRAPPED_ENTRY2 = wrapExportedHandler2(middleware_insertion_facade_default2);
+} else if (typeof middleware_insertion_facade_default2 === "function") {
+  WRAPPED_ENTRY2 = wrapWorkerEntrypoint2(middleware_insertion_facade_default2);
+}
+var middleware_loader_entry_default2 = WRAPPED_ENTRY2;
+export {
+  __INTERNAL_WRANGLER_MIDDLEWARE__2 as __INTERNAL_WRANGLER_MIDDLEWARE__,
+  middleware_loader_entry_default2 as default
+};
+//# sourceMappingURL=functionsWorker-0.3236396460498481.js.map

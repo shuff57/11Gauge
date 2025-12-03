@@ -59,7 +59,7 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     const ragQuery = payload?.ragQuery; // Optional: Specific query for RAG
     const images: string[] | undefined = payload?.images;
     const stream = Boolean(payload?.stream);
-    const think = Boolean(payload?.think);
+    const think = payload?.think; // Allow boolean or string
 
     if (!prompt && (!images || images.length === 0)) {
       throw new Error("Prompt or images are required.");

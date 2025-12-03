@@ -237,7 +237,41 @@ Return ONLY this JSON structure:
     });
 
     const visualFindings = visionResponse.text;
-    const visionTrace = `### Vision Analysis (Step 1/2)\n\`\`\`json\n${visualFindings}\n\`\`\``;
+    
+    // Format the vision output for the UI trace to be human-readable
+    let visionTrace = `### Vision Analysis (Step 1/2)\n\`\`\`json\n${visualFindings}\n\`\`\``;
+    try {
+      const cleanJson = visualFindings.replace(/```json\n?|\n?```/g, '').trim();
+      const data = JSON.parse(cleanJson);
+      
+      let readable = "### 👁️ Vision Analysis Findings\n\n";
+      
+      if (data.detected_defects && Array.isArray(data.detected_defects) && data.detected_defects.length > 0) {
+        readable += "**⚠️ Defects Detected:**\n";
+        data.detected_defects.forEach((d: any) => {
+          readable += `- **${d.type}** (${d.severity}): ${d.location}\n`;
+        });
+        readable += "\n";
+      } else {
+        readable += "**✅ No Obvious Defects Detected**\n\n";
+      }
+
+      if (data.student_observations && Array.isArray(data.student_observations)) {
+        readable += "**🔍 Observations:**\n";
+        data.student_observations.forEach((o: any) => {
+          const status = o.matches_reference === 'pass' ? '✅' : o.matches_reference === 'fail' ? '❌' : '⚠️';
+          readable += `- ${status} **${o.criterion}**: ${o.observed_condition}\n`;
+        });
+      }
+      
+      visionTrace = readable;
+    } catch (e) {
+      console.warn("Could not format vision JSON for display", e);
+    }
+
+    // Force update the UI with the formatted vision trace immediately
+    onThinking?.(visionTrace);
+
     console.log("--- [Pipeline] Step 1 (Vision) Complete ---");
     console.log("Visual Findings JSON:", visualFindings);
 
@@ -302,6 +336,12 @@ Based on the visual analysis above and the provided context, evaluate the weld a
     console.log("--- [Pipeline] Step 2 (Reasoning) Starting ---");
     console.log("Target Model:", settings.ollamaReasoningModel);
     console.log("RAG Query Generated:", ragQuery);
+    
+    const thinkValue = settings.ollamaReasoningModel?.includes('gpt-oss') 
+        ? (settings.ollamaThinkingLevel || 'low') 
+        : (settings.ollamaThinking ?? true);
+    console.log("Thinking Configuration:", thinkValue);
+
     console.log("Handing over structured vision data to reasoning model...");
 
     const finalResponse = await fetchOllamaGenerate({
@@ -311,7 +351,9 @@ Based on the visual analysis above and the provided context, evaluate the weld a
       prompt: reasoningPrompt,
       images: [], // No images for reasoning model
       stream: true,
-      think: settings.ollamaThinking,
+      think: settings.ollamaReasoningModel?.includes('gpt-oss') 
+        ? (settings.ollamaThinkingLevel || 'low') 
+        : (settings.ollamaThinking ?? true),
       ragQuery: ragQuery // Inject dynamic query based on defects
     }, onPartial, (thinkingText) => {
       // Append reasoning thinking to vision trace
@@ -346,14 +388,14 @@ Based on the visual analysis above and the provided context, evaluate the weld a
     prompt: promptPrefix,
     images,
     stream: true,
-    think: settings.ollamaThinking,
+    think: settings.ollamaThinking ?? true,
     ragQuery: undefined // Use default prompt for RAG
   }, onPartial, onThinking, onMetrics, onProgress); // Pass onProgress for RAG notifications
 
   return response.text;
 };
 
-// Helper to handle the fetch and streaming logic
+  // Helper to handle the fetch and streaming logic
 const fetchOllamaGenerate = async (
   params: {
     url: string;
@@ -362,7 +404,7 @@ const fetchOllamaGenerate = async (
     prompt: string;
     images?: string[];
     stream?: boolean;
-    think?: boolean;
+    think?: boolean | string;
     ragQuery?: string | null;
   },
   onPartial?: (text: string) => void,
@@ -371,13 +413,12 @@ const fetchOllamaGenerate = async (
   onProgress?: ProgressCallback
 ): Promise<{ text: string }> => {
   try {
+    console.log(`[Ollama API] Sending request to ${params.model}. Thinking: ${params.think}`);
     const response = await fetch(`/api/ollama/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params)
-    });
-
-    if (!response.ok) {
+    });    if (!response.ok) {
       const failure = await response.json().catch(() => undefined);
       throw new Error(failure?.error || `Request failed (${response.status}).`);
     }
