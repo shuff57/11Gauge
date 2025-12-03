@@ -1,6 +1,7 @@
 import { onRequest as __api_auth_google_callback_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\auth\\google\\callback.ts"
 import { onRequest as __api_examples__id__image_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\examples\\[id]\\image.ts"
 import { onRequest as __api_sources__id__chunks_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\sources\\[id]\\chunks.ts"
+import { onRequest as __api_admin_prompts_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\admin\\prompts.ts"
 import { onRequest as __api_admin_users_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\admin\\users.ts"
 import { onRequest as __api_auth_google_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\auth\\google.ts"
 import { onRequest as __api_auth_me_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\auth\\me.ts"
@@ -38,6 +39,13 @@ export const routes = [
       method: "",
       middlewares: [],
       modules: [__api_sources__id__chunks_ts_onRequest],
+    },
+  {
+      routePath: "/api/admin/prompts",
+      mountPath: "/api/admin",
+      method: "",
+      middlewares: [],
+      modules: [__api_admin_prompts_ts_onRequest],
     },
   {
       routePath: "/api/admin/users",

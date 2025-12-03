@@ -1,6 +1,6 @@
 // Service for handling LLM interactions and media processing
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider } from "../types";
-import { resolveSystemPrompt } from "../constants";
+import { resolveSystemPrompt, resolveVisionPrompt } from "../constants";
 import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
 
 export const VIDEO_UPLOAD_LIMITS = {
@@ -141,86 +141,7 @@ const analyzeWithOllama = async (
     // STEP 1: Vision Extraction
     onProgress?.({ phase: 'awaiting-model', message: 'Analyzing visual features (Step 1/2)...' });
     
-    const visionPrompt = `Analyze the provided image of a weld. You are a forensic welding inspector. Your job is to find every flaw, no matter how small.
-
-CRITICAL INSTRUCTION:
-Do not be polite. Do not overlook minor defects. If you see any irregularity, describe it explicitly as a defect.
-
-Analyze these aspects:
-1. Bead Consistency (width, height, straightness)
-2. Penetration & Fusion (toes, tie-in)
-3. Surface Profile (convexity, concavity)
-4. Defects (undercut, porosity, spatter, cracks)
-5. Heat Affected Zone (discoloration, width)
-6. Ripple Pattern (smoothness, spacing)
-7. Travel Stability (wandering, hesitation)
-
-OUTPUT FORMAT:
-Return ONLY this JSON structure:
-
-{
-  "rubric_criteria": [
-    {
-      "name": "Bead Consistency",
-      "pass_description": "Uniform width and height, straight travel path",
-      "fail_description": "Irregular width, varying height, wandering path"
-    },
-    {
-      "name": "Penetration & Fusion",
-      "pass_description": "Smooth tie-in at toes, no cold lap",
-      "fail_description": "Lack of fusion, cold lap, overlap"
-    },
-    {
-      "name": "Profile & Contour",
-      "pass_description": "Appropriate convexity/concavity for joint type",
-      "fail_description": "Excessive reinforcement or concavity"
-    },
-    {
-      "name": "Ripple Pattern",
-      "pass_description": "Evenly spaced, distinct ripples",
-      "fail_description": "Irregular spacing, coarse ripples"
-    },
-    {
-      "name": "Heat Control",
-      "pass_description": "No undercut, appropriate HAZ width",
-      "fail_description": "Undercut, excessive HAZ, burn-through"
-    }
-  ],
-  "student_observations": [
-    {
-      "criterion": "Bead Consistency",
-      "observed_condition": "Detailed observation of width/height/straightness. Be critical.",
-      "matches_reference": "pass | partial | fail"
-    },
-    {
-      "criterion": "Penetration & Fusion",
-      "observed_condition": "Detailed observation of toes and tie-in. Look for cold lap.",
-      "matches_reference": "pass | partial | fail"
-    },
-    {
-      "criterion": "Profile & Contour",
-      "observed_condition": "Detailed observation of crown/flatness.",
-      "matches_reference": "pass | partial | fail"
-    },
-    {
-      "criterion": "Ripple Pattern",
-      "observed_condition": "Detailed observation of ripple spacing/smoothness.",
-      "matches_reference": "pass | partial | fail"
-    },
-    {
-      "criterion": "Heat Control",
-      "observed_condition": "Detailed observation of HAZ and undercut.",
-      "matches_reference": "pass | partial | fail"
-    }
-  ],
-  "detected_defects": [
-    {
-      "type": "Defect Type (e.g. Porosity, Undercut, Spatter)",
-      "location": "Location on weld",
-      "severity": "minor | moderate | severe"
-    }
-  ]
-}`;
+    const visionPrompt = resolveVisionPrompt(settings.visionPrompt);
 
     const visionResponse = await fetchOllamaGenerate({
       url: configuredUrl,
@@ -325,11 +246,6 @@ ${visualFindings}
 
 **TASK:**
 Act as the Welding Instructor defined in your system prompt. Use the \`student_observations\` and \`detected_defects\` from the JSON above to populate your report following the structure defined in your system instructions.
-
-CRITICAL SCORING INSTRUCTION:
-You must trust the "observed_condition" and "detected_defects" in the JSON.
-- If the JSON mentions "undercut", "porosity", or "irregular", you MUST score that category 2 or lower.
-- Do not be lenient. If the vision model saw a defect, it exists.
 
 Based on the visual analysis above and the provided context, evaluate the weld according to this rubric. Provide the scores and feedback.`;
 

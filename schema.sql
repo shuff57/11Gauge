@@ -86,3 +86,9 @@ CREATE TABLE IF NOT EXISTS admin_allowlist (
   email TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TEXT NOT NULL
+);

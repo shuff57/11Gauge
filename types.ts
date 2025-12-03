@@ -19,6 +19,7 @@ export interface AppSettings {
   ollamaThinking?: boolean;
   ollamaThinkingLevel?: 'low' | 'medium' | 'high';
   systemPrompt?: string | null;
+  visionPrompt?: string | null;
   materialType?: string;
   weldProcess?: string;
   materialThickness?: string;

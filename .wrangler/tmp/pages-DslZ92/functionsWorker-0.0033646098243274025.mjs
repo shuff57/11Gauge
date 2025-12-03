@@ -437,6 +437,70 @@ var onRequest3 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   }
 }, "onRequest");
 
+// api/admin/prompts.ts
+var json = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+  ...init,
+  headers: {
+    "Content-Type": "application/json",
+    ...init.headers || {}
+  }
+}), "json");
+var onRequest4 = /* @__PURE__ */ __name(async ({ request, env }) => {
+  const sessionUser = await getSessionUser(env, request);
+  if (!sessionUser || !sessionUser.isAdmin) {
+    return json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (request.method === "GET") {
+    try {
+      const rows = await env.USERS_DB.prepare(
+        "SELECT key, value FROM system_settings WHERE key IN ('system_prompt', 'vision_prompt')"
+      ).all();
+      const settings = {};
+      if (rows.results) {
+        rows.results.forEach((row) => {
+          settings[row.key] = row.value;
+        });
+      }
+      return json({
+        systemPrompt: settings["system_prompt"] || null,
+        visionPrompt: settings["vision_prompt"] || null
+      });
+    } catch (err) {
+      console.error("Failed to fetch prompts", err);
+      return json({ error: "Database error" }, { status: 500 });
+    }
+  }
+  if (request.method === "POST") {
+    try {
+      const body = await request.json();
+      const { systemPrompt, visionPrompt } = body;
+      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+      const stmt = env.USERS_DB.prepare(
+        "INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+      );
+      const batch = [];
+      if (systemPrompt === null) {
+        batch.push(env.USERS_DB.prepare("DELETE FROM system_settings WHERE key = 'system_prompt'"));
+      } else if (systemPrompt !== void 0) {
+        batch.push(stmt.bind("system_prompt", systemPrompt, timestamp));
+      }
+      if (visionPrompt === null) {
+        batch.push(env.USERS_DB.prepare("DELETE FROM system_settings WHERE key = 'vision_prompt'"));
+      } else if (visionPrompt !== void 0) {
+        batch.push(stmt.bind("vision_prompt", visionPrompt, timestamp));
+      }
+      if (batch.length > 0) {
+        await env.USERS_DB.batch(batch);
+      }
+      return json({ success: true });
+    } catch (err) {
+      console.error("Failed to save prompts", err);
+      return json({ error: "Failed to save settings" }, { status: 500 });
+    }
+  }
+  return new Response("Method Not Allowed", { status: 405 });
+}, "onRequest");
+
 // utils/admin.ts
 var parseAdminEmails = /* @__PURE__ */ __name((raw) => {
   if (!raw) return [];
@@ -466,20 +530,20 @@ var withAdminFlag = /* @__PURE__ */ __name(async (env, user) => {
 }, "withAdminFlag");
 
 // api/admin/users.ts
-var json = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json2 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest4 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest5 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json({ error: "Not authenticated" }, { status: 401 });
+    return json2({ error: "Not authenticated" }, { status: 401 });
   }
   if (!await isAdminEmail(env, user.email)) {
-    return json({ error: "Forbidden" }, { status: 403 });
+    return json2({ error: "Forbidden" }, { status: 403 });
   }
   if (request.method === "GET") {
     return handleList(env);
@@ -503,48 +567,48 @@ var handleList = /* @__PURE__ */ __name(async (env) => {
         combined.push({ email, created_at: "System (Env Var)" });
       }
     }
-    return json({ admins: combined });
+    return json2({ admins: combined });
   } catch (err) {
-    return json({ error: err.message }, { status: 500 });
+    return json2({ error: err.message }, { status: 500 });
   }
 }, "handleList");
 var handleAdd = /* @__PURE__ */ __name(async (request, env) => {
   try {
     const { email } = await request.json();
     if (!email || typeof email !== "string") {
-      return json({ error: "Email is required" }, { status: 400 });
+      return json2({ error: "Email is required" }, { status: 400 });
     }
     const normalized = email.trim().toLowerCase();
     await env.USERS_DB.prepare(
       "INSERT OR IGNORE INTO admin_allowlist (email, created_at) VALUES (?, ?)"
     ).bind(normalized, (/* @__PURE__ */ new Date()).toISOString()).run();
-    return json({ success: true });
+    return json2({ success: true });
   } catch (err) {
-    return json({ error: err.message }, { status: 500 });
+    return json2({ error: err.message }, { status: 500 });
   }
 }, "handleAdd");
 var handleRemove = /* @__PURE__ */ __name(async (request, env) => {
   try {
     const { email } = await request.json();
     if (!email || typeof email !== "string") {
-      return json({ error: "Email is required" }, { status: 400 });
+      return json2({ error: "Email is required" }, { status: 400 });
     }
     const normalized = email.trim().toLowerCase();
     const envAdmins = (env.ADMIN_EMAILS || "").split(/[,\n;]/).map((e) => e.trim().toLowerCase()).filter(Boolean);
     if (envAdmins.includes(normalized)) {
-      return json({ error: "Cannot remove system admin defined in environment variables." }, { status: 400 });
+      return json2({ error: "Cannot remove system admin defined in environment variables." }, { status: 400 });
     }
     await env.USERS_DB.prepare(
       "DELETE FROM admin_allowlist WHERE email = ?"
     ).bind(normalized).run();
-    return json({ success: true });
+    return json2({ success: true });
   } catch (err) {
-    return json({ error: err.message }, { status: 500 });
+    return json2({ error: err.message }, { status: 500 });
   }
 }, "handleRemove");
 
 // api/auth/google.ts
-var onRequest5 = /* @__PURE__ */ __name(async (context) => {
+var onRequest6 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const reqUrl = new URL(request.url);
   const returnToParam = reqUrl.searchParams.get("return_to");
@@ -569,23 +633,23 @@ var onRequest5 = /* @__PURE__ */ __name(async (context) => {
 }, "onRequest");
 
 // api/auth/me.ts
-var json2 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json3 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest6 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest7 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json2({ user: null }, { status: 401 });
+    return json3({ user: null }, { status: 401 });
   }
-  return json2({ user: await withAdminFlag(env, user) });
+  return json3({ user: await withAdminFlag(env, user) });
 }, "onRequest");
 
 // api/auth/signin.ts
-var json3 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json4 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -599,26 +663,26 @@ var hashPassword = /* @__PURE__ */ __name(async (password) => {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }, "hashPassword");
-var onRequest7 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest8 = /* @__PURE__ */ __name(async ({ request, env }) => {
   console.log("[Auth] Request received");
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
   console.log("[Auth] USERS_DB:", !!env.USERS_DB);
   if (!env.USERS_DB) {
-    return json3({ error: "Database not configured" }, { status: 501 });
+    return json4({ error: "Database not configured" }, { status: 501 });
   }
   let payload;
   try {
     payload = await request.json();
   } catch (e) {
     console.error("[Auth] JSON parse error:", e);
-    return json3({ error: "Invalid JSON" }, { status: 400 });
+    return json4({ error: "Invalid JSON" }, { status: 400 });
   }
   const { email, password } = payload;
   console.log("[Auth] Email:", email);
   if (!email || !password) {
-    return json3({ error: "Email and password are required" }, { status: 400 });
+    return json4({ error: "Email and password are required" }, { status: 400 });
   }
   const emailLower = email.toLowerCase().trim();
   const passwordHash = await hashPassword(password);
@@ -634,11 +698,11 @@ var onRequest7 = /* @__PURE__ */ __name(async ({ request, env }) => {
         "SELECT id FROM users WHERE email = ? AND password_hash = ?"
       ).bind(emailLower, passwordHash).first();
       if (!userWithPassword) {
-        return json3({ error: "Invalid credentials" }, { status: 401 });
+        return json4({ error: "Invalid credentials" }, { status: 401 });
       }
       const token2 = await createSession(env, existingUser.id);
       const headers2 = token2 ? { "Set-Cookie": buildSessionCookie(token2, { secure }) } : {};
-      return json3({
+      return json4({
         success: true,
         user: await withAdminFlag(env, { id: existingUser.id, email: existingUser.email }),
         isNewUser: false
@@ -652,19 +716,19 @@ var onRequest7 = /* @__PURE__ */ __name(async ({ request, env }) => {
     }
     const token = await createSession(env, result.meta.last_row_id);
     const headers = token ? { "Set-Cookie": buildSessionCookie(token, { secure }) } : {};
-    return json3({
+    return json4({
       success: true,
       user: await withAdminFlag(env, { id: result.meta.last_row_id, email: emailLower }),
       isNewUser: true
     }, { headers });
   } catch (err) {
     console.error("Auth error:", err);
-    return json3({ error: "Authentication failed" }, { status: 500 });
+    return json4({ error: "Authentication failed" }, { status: 500 });
   }
 }, "onRequest");
 
 // api/auth/signout.ts
-var onRequest8 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest9 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const token = getSessionToken(request);
   if (token) {
     await deleteSession(env, token);
@@ -729,27 +793,27 @@ var decryptText = /* @__PURE__ */ __name(async (payload, secret) => {
 // api/keys/ollama.ts
 var PROVIDER = "ollama";
 var DEFAULT_LABEL = "Default";
-var json4 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json5 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest9 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest10 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const sessionUser = await getSessionUser(env, request);
   const secret = env.OLLAMA_KEY_SECRET;
   if (request.method === "POST") {
     if (!sessionUser || !env.USERS_DB) {
-      return json4({ error: "Not authenticated" }, { status: 401 });
+      return json5({ error: "Not authenticated" }, { status: 401 });
     }
     if (!secret) {
-      return json4({ error: "Encryption secret not configured" }, { status: 500 });
+      return json5({ error: "Encryption secret not configured" }, { status: 500 });
     }
     const payload = await request.json().catch(() => ({}));
     const key = (payload?.key || "").trim();
     if (!key) {
-      return json4({ error: "API key is required." }, { status: 400 });
+      return json5({ error: "API key is required." }, { status: 400 });
     }
     try {
       const encrypted = await encryptText(key, secret);
@@ -760,43 +824,43 @@ var onRequest9 = /* @__PURE__ */ __name(async ({ request, env }) => {
       } else {
         await env.USERS_DB.prepare("INSERT INTO user_keys (user_id, provider, label, key_value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL, encrypted, timestamp, timestamp).run();
       }
-      return json4({ success: true });
+      return json5({ success: true });
     } catch (err) {
       console.error("Key store error:", err);
-      return json4({ error: "Failed to store key" }, { status: 500 });
+      return json5({ error: "Failed to store key" }, { status: 500 });
     }
   }
   if (request.method === "DELETE") {
     if (!sessionUser || !env.USERS_DB) {
-      return json4({ error: "Not authenticated" }, { status: 401 });
+      return json5({ error: "Not authenticated" }, { status: 401 });
     }
     if (!secret) {
-      return json4({ error: "Encryption secret not configured" }, { status: 500 });
+      return json5({ error: "Encryption secret not configured" }, { status: 500 });
     }
     try {
       await env.USERS_DB.prepare("DELETE FROM user_keys WHERE user_id = ? AND provider = ? AND label = ?").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL).run();
-      return json4({ success: true });
+      return json5({ success: true });
     } catch (err) {
       console.error("Key delete error:", err);
-      return json4({ error: "Failed to delete key" }, { status: 500 });
+      return json5({ error: "Failed to delete key" }, { status: 500 });
     }
   }
   if (request.method === "GET") {
     if (!secret) {
-      return json4({ error: "Encryption secret not configured" }, { status: 500 });
+      return json5({ error: "Encryption secret not configured" }, { status: 500 });
     }
     if (sessionUser && env.USERS_DB) {
       try {
         const keyRow = await env.USERS_DB.prepare("SELECT key_value FROM user_keys WHERE user_id = ? AND provider = ? AND label = ?").bind(sessionUser.id, PROVIDER, DEFAULT_LABEL).first();
-        if (!keyRow?.key_value) return json4({ key: null });
+        if (!keyRow?.key_value) return json5({ key: null });
         const decrypted = await decryptText(keyRow.key_value, secret);
-        return json4({ key: decrypted || null });
+        return json5({ key: decrypted || null });
       } catch (err) {
         console.error("Key fetch error:", err);
-        return json4({ key: null, error: "Failed to fetch key" }, { status: 500 });
+        return json5({ key: null, error: "Failed to fetch key" }, { status: 500 });
       }
     }
-    return json4({ key: null });
+    return json5({ key: null });
   }
   return new Response("Method Not Allowed", {
     status: 405,
@@ -898,7 +962,7 @@ var cosineSimilarity = /* @__PURE__ */ __name((a, b) => {
   }
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }, "cosineSimilarity");
-var onRequest10 = /* @__PURE__ */ __name(async (context) => {
+var onRequest11 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -1015,7 +1079,7 @@ ${prompt}`;
 }, "onRequest");
 
 // api/ollama/test.ts
-var onRequest11 = /* @__PURE__ */ __name(async (context) => {
+var onRequest12 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -1053,18 +1117,18 @@ var onRequest11 = /* @__PURE__ */ __name(async (context) => {
 }, "onRequest");
 
 // api/examples/[id].ts
-var json5 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json6 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest12 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest13 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const url = new URL(request.url);
   const id = url.pathname.split("/").pop();
   if (!id) {
-    return json5({ error: "Example ID missing." }, { status: 400 });
+    return json6({ error: "Example ID missing." }, { status: 400 });
   }
   if (request.method === "GET") {
     return handleGet(id, request, env);
@@ -1077,13 +1141,13 @@ var onRequest12 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var handleGet = /* @__PURE__ */ __name(async (id, request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json5({ error: "Not authenticated" }, { status: 401 });
+    return json6({ error: "Not authenticated" }, { status: 401 });
   }
   const record = await getExampleImageRecord(env, id);
   if (!record) {
-    return json5({ error: "Not found" }, { status: 404 });
+    return json6({ error: "Not found" }, { status: 404 });
   }
-  return json5({
+  return json6({
     image: {
       ...toExampleImageSummary(record),
       imageUrl: `/api/examples/${record.id}/image`
@@ -1093,17 +1157,17 @@ var handleGet = /* @__PURE__ */ __name(async (id, request, env) => {
 var handleDelete = /* @__PURE__ */ __name(async (id, request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json5({ error: "Not authenticated" }, { status: 401 });
+    return json6({ error: "Not authenticated" }, { status: 401 });
   }
   if (!isAdminEmail(env, user.email)) {
-    return json5({ error: "Forbidden" }, { status: 403 });
+    return json6({ error: "Forbidden" }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {
-    return json5({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+    return json6({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
   }
   const record = await getExampleImageRecord(env, id);
   if (!record) {
-    return json5({ error: "Not found" }, { status: 404 });
+    return json6({ error: "Not found" }, { status: 404 });
   }
   try {
     await env.PRIMARY_SOURCES.delete(record.object_key);
@@ -1111,11 +1175,11 @@ var handleDelete = /* @__PURE__ */ __name(async (id, request, env) => {
     console.warn("Failed to delete example image object:", err);
   }
   await deleteExampleImageRecord(env, id);
-  return json5({ success: true });
+  return json6({ success: true });
 }, "handleDelete");
 
 // api/keys/[id].ts
-var json6 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json7 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -1129,24 +1193,24 @@ var fetchKey = /* @__PURE__ */ __name(async (env, userId, id) => {
   ).bind(id, userId).first();
   return row || null;
 }, "fetchKey");
-var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequest14 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const keyId = Number(params?.id);
   if (!keyId) {
-    return json6({ error: "Invalid key id" }, { status: 400 });
+    return json7({ error: "Invalid key id" }, { status: 400 });
   }
   const sessionUser = await getSessionUser(env, request);
   if (!sessionUser || !env.USERS_DB) {
-    return json6({ error: "Not authenticated" }, { status: 401 });
+    return json7({ error: "Not authenticated" }, { status: 401 });
   }
   const secret = env.OLLAMA_KEY_SECRET;
   if (!secret) {
-    return json6({ error: "Encryption secret not configured" }, { status: 500 });
+    return json7({ error: "Encryption secret not configured" }, { status: 500 });
   }
   if (request.method === "GET") {
     const row = await fetchKey(env, sessionUser.id, keyId);
-    if (!row) return json6({ error: "Key not found" }, { status: 404 });
+    if (!row) return json7({ error: "Key not found" }, { status: 404 });
     const decrypted = await decryptText(row.key_value, secret);
-    return json6({
+    return json7({
       key: {
         id: row.id,
         provider: row.provider,
@@ -1159,7 +1223,7 @@ var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   }
   if (request.method === "PUT") {
     const existing = await fetchKey(env, sessionUser.id, keyId);
-    if (!existing) return json6({ error: "Key not found" }, { status: 404 });
+    if (!existing) return json7({ error: "Key not found" }, { status: 404 });
     try {
       const payload = await request.json();
       const updates = [];
@@ -1181,7 +1245,7 @@ var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
         lastFour = rawKey.slice(-4);
       }
       if (!updates.length) {
-        return json6({ error: "No changes provided" }, { status: 400 });
+        return json7({ error: "No changes provided" }, { status: 400 });
       }
       const timestamp = (/* @__PURE__ */ new Date()).toISOString();
       updates.push("updated_at = ?");
@@ -1192,10 +1256,10 @@ var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
       ).bind(...bindings).run();
       const refreshed = await fetchKey(env, sessionUser.id, keyId);
       if (!refreshed) {
-        return json6({ error: "Key not found" }, { status: 404 });
+        return json7({ error: "Key not found" }, { status: 404 });
       }
       const decrypted = await decryptText(refreshed.key_value, secret);
-      return json6({
+      return json7({
         key: {
           id: refreshed.id,
           provider: refreshed.provider,
@@ -1207,14 +1271,14 @@ var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
       });
     } catch (err) {
       if (err?.message?.includes("UNIQUE")) {
-        return json6({ error: "A key with that label already exists for this provider." }, { status: 409 });
+        return json7({ error: "A key with that label already exists for this provider." }, { status: 409 });
       }
-      return json6({ error: err?.message || "Failed to update key" }, { status: 400 });
+      return json7({ error: err?.message || "Failed to update key" }, { status: 400 });
     }
   }
   if (request.method === "DELETE") {
     await env.USERS_DB.prepare("DELETE FROM user_keys WHERE id = ? AND user_id = ?").bind(keyId, sessionUser.id).run();
-    return json6({ success: true });
+    return json7({ success: true });
   }
   return new Response("Method Not Allowed", {
     status: 405,
@@ -1223,14 +1287,14 @@ var onRequest13 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
 }, "onRequest");
 
 // api/sources/[id].ts
-var json7 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json8 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
     ...init.headers || {}
   }
 }), "json");
-var onRequest14 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequest15 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   if (request.method === "GET") {
     return handleGet2(request, env, params);
   }
@@ -1242,42 +1306,42 @@ var onRequest14 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
 var handleGet2 = /* @__PURE__ */ __name(async (request, env, params) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json7({ error: "Not authenticated" }, { status: 401 });
+    return json8({ error: "Not authenticated" }, { status: 401 });
   }
   const id = params?.id;
   if (!id) {
-    return json7({ error: "Missing source id" }, { status: 400 });
+    return json8({ error: "Missing source id" }, { status: 400 });
   }
   try {
     const record = await getPrimarySourceRecord(env, user.id, id);
     if (!record) {
-      return json7({ error: "Source not found" }, { status: 404 });
+      return json8({ error: "Source not found" }, { status: 404 });
     }
-    return json7({ source: toPrimarySourceSummary(record) });
+    return json8({ source: toPrimarySourceSummary(record) });
   } catch (err) {
     console.error("Primary source fetch failed:", err);
-    return json7({ error: "Unable to load source" }, { status: 500 });
+    return json8({ error: "Unable to load source" }, { status: 500 });
   }
 }, "handleGet");
 var handleDelete2 = /* @__PURE__ */ __name(async (request, env, params) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json7({ error: "Not authenticated" }, { status: 401 });
+    return json8({ error: "Not authenticated" }, { status: 401 });
   }
   if (!isAdminEmail(env, user.email)) {
-    return json7({ error: "Forbidden" }, { status: 403 });
+    return json8({ error: "Forbidden" }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {
-    return json7({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+    return json8({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
   }
   const id = params?.id;
   if (!id) {
-    return json7({ error: "Missing source id" }, { status: 400 });
+    return json8({ error: "Missing source id" }, { status: 400 });
   }
   try {
     const record = await getPrimarySourceRecord(env, user.id, id);
     if (!record) {
-      return json7({ error: "Source not found" }, { status: 404 });
+      return json8({ error: "Source not found" }, { status: 404 });
     }
     await Promise.all([
       env.PRIMARY_SOURCES.delete(record.pdf_object_key).catch((err) => {
@@ -1288,15 +1352,15 @@ var handleDelete2 = /* @__PURE__ */ __name(async (request, env, params) => {
       })
     ]);
     await deletePrimarySourceRecord(env, id);
-    return json7({ success: true });
+    return json8({ success: true });
   } catch (err) {
     console.error("Primary source deletion failed:", err);
-    return json7({ error: "Unable to delete source" }, { status: 500 });
+    return json8({ error: "Unable to delete source" }, { status: 500 });
   }
 }, "handleDelete");
 
 // api/examples/index.ts
-var json8 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json9 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -1305,7 +1369,7 @@ var json8 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.string
 }), "json");
 var MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 var VALID_LABELS = ["good", "bad"];
-var onRequest15 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
   if (request.method === "GET") {
     return handleList2(request, env);
   }
@@ -1317,7 +1381,7 @@ var onRequest15 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var handleList2 = /* @__PURE__ */ __name(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json8({ error: "Not authenticated" }, { status: 401 });
+    return json9({ error: "Not authenticated" }, { status: 401 });
   }
   try {
     const url = new URL(request.url);
@@ -1328,22 +1392,22 @@ var handleList2 = /* @__PURE__ */ __name(async (request, env) => {
       ...toExampleImageSummary(record),
       imageUrl: `/api/examples/${record.id}/image`
     }));
-    return json8({ images });
+    return json9({ images });
   } catch (err) {
     console.error("Example image list failed:", err);
-    return json8({ error: "Unable to load example images." }, { status: 500 });
+    return json9({ error: "Unable to load example images." }, { status: 500 });
   }
 }, "handleList");
 var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json8({ error: "Not authenticated" }, { status: 401 });
+    return json9({ error: "Not authenticated" }, { status: 401 });
   }
   if (!await isAdminEmail(env, user.email)) {
-    return json8({ error: "Forbidden" }, { status: 403 });
+    return json9({ error: "Forbidden" }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {
-    return json8({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+    return json9({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
   }
   const form = await request.formData();
   const file = form.get("file");
@@ -1356,17 +1420,17 @@ var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
   const jointType = String(form.get("jointType") || "").trim() || null;
   const weldPosition = String(form.get("weldPosition") || "").trim() || null;
   if (!(file instanceof File)) {
-    return json8({ error: "File is required." }, { status: 400 });
+    return json9({ error: "File is required." }, { status: 400 });
   }
   if (!file.type?.startsWith("image/") && !file.type?.startsWith("video/")) {
-    return json8({ error: "Only image or video uploads are supported." }, { status: 400 });
+    return json9({ error: "Only image or video uploads are supported." }, { status: 400 });
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    return json8({ error: "File exceeds the 50MB upload limit." }, { status: 400 });
+    return json9({ error: "File exceeds the 50MB upload limit." }, { status: 400 });
   }
   const label = VALID_LABELS.includes(labelRaw) ? labelRaw : null;
   if (!label) {
-    return json8({ error: "Label must be 'good' or 'bad'." }, { status: 400 });
+    return json9({ error: "Label must be 'good' or 'bad'." }, { status: 400 });
   }
   const title = titleRaw || file.name.replace(/\.[^.]+$/, "").trim() || "Example Image";
   const description = descriptionRaw || null;
@@ -1410,7 +1474,7 @@ var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
         console.warn("Failed to generate embedding for example image:", embedErr);
       }
     }
-    return json8({
+    return json9({
       image: {
         ...toExampleImageSummary(record),
         imageUrl: `/api/examples/${record.id}/image`
@@ -1418,13 +1482,13 @@ var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
     }, { status: 201 });
   } catch (err) {
     console.error("Example image upload failed:", err);
-    return json8({ error: err?.message || "Failed to store example image." }, { status: 400 });
+    return json9({ error: err?.message || "Failed to store example image." }, { status: 400 });
   }
 }, "handleUpload");
 
 // api/keys/index.ts
 var AVAILABLE_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "gemini", "openai"]);
-var json9 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json10 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -1460,21 +1524,21 @@ var summarizeRow = /* @__PURE__ */ __name(async (row, secret) => {
     lastFour: decrypted ? decrypted.slice(-4) : null
   };
 }, "summarizeRow");
-var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest17 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const sessionUser = await getSessionUser(env, request);
   if (!sessionUser || !env.USERS_DB) {
-    return json9({ error: "Not authenticated" }, { status: 401 });
+    return json10({ error: "Not authenticated" }, { status: 401 });
   }
   const secret = env.OLLAMA_KEY_SECRET;
   if (!secret) {
-    return json9({ error: "Encryption secret not configured" }, { status: 500 });
+    return json10({ error: "Encryption secret not configured" }, { status: 500 });
   }
   if (request.method === "GET") {
     const rows = await env.USERS_DB.prepare(
       "SELECT id, provider, label, key_value, created_at, updated_at FROM user_keys WHERE user_id = ? ORDER BY created_at DESC"
     ).bind(sessionUser.id).all().then((res) => res.results || []);
     const keys = await Promise.all(rows.map((row) => summarizeRow(row, secret)));
-    return json9({ keys });
+    return json10({ keys });
   }
   if (request.method === "POST") {
     let provider;
@@ -1487,7 +1551,7 @@ var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
       key = (payload?.key || "").trim();
       if (!key) throw new Error("API key is required");
     } catch (err) {
-      return json9({ error: err?.message || "Invalid payload" }, { status: 400 });
+      return json10({ error: err?.message || "Invalid payload" }, { status: 400 });
     }
     try {
       const encrypted = await encryptText(key, secret);
@@ -1496,7 +1560,7 @@ var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
         "INSERT INTO user_keys (user_id, provider, label, key_value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
       ).bind(sessionUser.id, provider, label, encrypted, timestamp, timestamp).run();
       const id = result.meta?.last_row_id;
-      return json9({
+      return json10({
         key: {
           id,
           provider,
@@ -1508,10 +1572,10 @@ var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
       }, { status: 201 });
     } catch (err) {
       if (err?.message?.includes("UNIQUE")) {
-        return json9({ error: "A key with that label already exists for this provider." }, { status: 409 });
+        return json10({ error: "A key with that label already exists for this provider." }, { status: 409 });
       }
       console.error("Key insert error", err);
-      return json9({ error: "Failed to create key" }, { status: 500 });
+      return json10({ error: "Failed to create key" }, { status: 500 });
     }
   }
   return new Response("Method Not Allowed", {
@@ -1521,7 +1585,7 @@ var onRequest16 = /* @__PURE__ */ __name(async ({ request, env }) => {
 }, "onRequest");
 
 // api/sources/index.ts
-var json10 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
+var json11 = /* @__PURE__ */ __name((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
     "Content-Type": "application/json",
@@ -1570,7 +1634,7 @@ var computeDigest = /* @__PURE__ */ __name(async (chunks) => {
   const hash = await crypto.subtle.digest("SHA-256", encoder2.encode(payload));
   return toHex(hash);
 }, "computeDigest");
-var onRequest17 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequest18 = /* @__PURE__ */ __name(async ({ request, env }) => {
   if (request.method === "GET") {
     return handleList3(request, env);
   }
@@ -1582,42 +1646,42 @@ var onRequest17 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var handleList3 = /* @__PURE__ */ __name(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json10({ error: "Not authenticated" }, { status: 401 });
+    return json11({ error: "Not authenticated" }, { status: 401 });
   }
   try {
     const records = await listPrimarySourceRecords(env, user.id);
     const sources = records.map(toPrimarySourceSummary);
-    return json10({ sources });
+    return json11({ sources });
   } catch (err) {
     console.error("Primary source list failed:", err);
-    return json10({ error: "Unable to load primary sources." }, { status: 500 });
+    return json11({ error: "Unable to load primary sources." }, { status: 500 });
   }
 }, "handleList");
 var handleUpload2 = /* @__PURE__ */ __name(async (request, env) => {
   const user = await getSessionUser(env, request);
   if (!user) {
-    return json10({ error: "Not authenticated" }, { status: 401 });
+    return json11({ error: "Not authenticated" }, { status: 401 });
   }
   if (!isAdminEmail(env, user.email)) {
-    return json10({ error: "Forbidden" }, { status: 403 });
+    return json11({ error: "Forbidden" }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {
-    return json10({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
+    return json11({ error: "PRIMARY_SOURCES bucket missing" }, { status: 500 });
   }
   const form = await request.formData();
   const file = form.get("file");
   const manifestRaw = form.get("manifest");
   if (!(file instanceof File)) {
-    return json10({ error: "PDF file is required" }, { status: 400 });
+    return json11({ error: "PDF file is required" }, { status: 400 });
   }
   if (typeof manifestRaw !== "string") {
-    return json10({ error: "Manifest payload missing" }, { status: 400 });
+    return json11({ error: "Manifest payload missing" }, { status: 400 });
   }
   let parsed;
   try {
     parsed = JSON.parse(manifestRaw);
   } catch (err) {
-    return json10({ error: "Invalid manifest payload" }, { status: 400 });
+    return json11({ error: "Invalid manifest payload" }, { status: 400 });
   }
   try {
     const validated = validateManifest(parsed, file.name);
@@ -1708,103 +1772,37 @@ var handleUpload2 = /* @__PURE__ */ __name(async (request, env) => {
         console.error("Embedding generation failed (non-fatal):", embedErr);
       }
     }
-    return json10({ source: toPrimarySourceSummary(record) }, { status: 201 });
+    return json11({ source: toPrimarySourceSummary(record) }, { status: 201 });
   } catch (err) {
     console.error("Primary source upload failed:", err);
-    return json10({ error: err?.message || "Failed to store primary source." }, { status: 400 });
+    return json11({ error: err?.message || "Failed to store primary source." }, { status: 400 });
   }
 }, "handleUpload");
 
-// ../constants.ts
-var DEFAULT_SYSTEM_PROMPT = `You are a strict Certified Welding Inspector (CWI) and expert instructor.
-
-Your role is to evaluate welding practice results with high standards. You must identify every flaw and grade conservatively. A "perfect score" is reserved only for X-ray quality, code-compliant welds.
-
-SCORING STANDARDS:
-\u2022 5 (Excellent): Industry/X-Ray Quality. No visible defects. Perfect consistency.
-\u2022 4 (Good): Job-ready. Minor cosmetic imperfections only. No structural defects.
-\u2022 3 (Average): Student practice level. Inconsistent but sound.
-\u2022 2 (Below Average): Visible defects (undercut, porosity) or poor consistency.
-\u2022 1 (Fail): Major defects, lack of fusion, or safety hazards.
-\u2022 0 (Unacceptable): Complete failure of technique.
-
-CRITICAL RULE: If the input data mentions ANY defect (porosity, undercut, cracks, lack of fusion), the score for that category MUST NOT exceed 2.
-
-FRAMEWORK FOR ANALYSIS:
-When analyzing the weld, you must evaluate:
-1. Visual Quality: Bead consistency, penetration, profile, ripple pattern, and heat control.
-2. Defects: Identify porosity, undercut, spatter, etc., and explain the root cause (technique, settings).
-3. Corrections: Provide specific adjustments for angle, travel speed, and stick-out.
-4. Drills: Recommend specific practice drills (e.g., padding beads, stop-start).
-5. Safety: Identify any PPE or safety risks.
-
-REQUIRED OUTPUT FORMAT:
-Present your analysis in the following strict Markdown structure:
-
-### Output Format
-| Criterion | Score (0\u20135) | Pass/Fail | Notes |
-|-----------|-------------|-----------|-------|
-| Bead Consistency | [Score] | [Pass/Fail] | [Specific observation] |
-| Penetration & Fusion | [Score] | [Pass/Fail] | [Specific observation] |
-| Profile & Contour | [Score] | [Pass/Fail] | [Specific observation] |
-| Ripple Pattern | [Score] | [Pass/Fail] | [Specific observation] |
-| Heat Control | [Score] | [Pass/Fail] | [Specific observation] |
-| Defect Check | [Score] | [Pass/Fail] | [List defects or "None"] |
-
-### Summary Report
-**Final Grade:** [Letter Grade] ([Average Score]/5)
-
-**Key Strengths:**
-- [Strength 1]
-- [Strength 2]
-
-**Primary Issues:**
-- [Issue 1: Defect + Root Cause]
-- [Issue 2: Defect + Root Cause]
-
-**Next Practice Strategies:**
-- [Technique Correction 1]
-- [Practice Drill 1]
-
-**Safety Notes:**
-- [Safety Note]
-
-Tone:
-Strict, professional, and direct. Do not sugarcoat defects. Focus on technical precision.
-`;
-var nodeEnv = typeof process !== "undefined" ? process.env : void 0;
-var defaultOllamaUrl = nodeEnv?.OLLAMA_URL || "";
-var defaultCloudVisionModel = "qwen3-vl:235b-instruct-cloud";
-var defaultOllamaModel = nodeEnv?.OLLAMA_MODEL || defaultCloudVisionModel;
-var defaultOllamaKey = "";
-var defaultGeminiKey = "";
-var DEFAULT_SETTINGS = {
-  provider: "OLLAMA" /* OLLAMA */,
-  geminiKey: defaultGeminiKey,
-  geminiModel: "gemini-2.5-flash",
-  openaiKey: "",
-  ollamaUrl: defaultOllamaUrl,
-  ollamaModel: defaultOllamaModel,
-  ollamaReasoningModel: "gpt-oss:20b-cloud",
-  ollamaKey: defaultOllamaKey,
-  geminiKeyId: null,
-  openaiKeyId: null,
-  ollamaKeyId: null,
-  ollamaThinking: true,
-  ollamaThinkingLevel: "low",
-  systemPrompt: null
-};
-var MODEL_LABELS = {
-  ["GEMINI" /* GEMINI */]: "Google (Gemini)",
-  ["OPENAI" /* OPENAI */]: "OpenAI (ChatGPT)",
-  ["OLLAMA" /* OLLAMA */]: "Ollama (OpenSource)"
-};
-
 // api/system-prompt.ts
-var onRequest18 = /* @__PURE__ */ __name(async ({ env }) => {
-  const prompt = env.SYSTEM_PROMPT?.trim() || DEFAULT_SYSTEM_PROMPT;
+var onRequest19 = /* @__PURE__ */ __name(async ({ env }) => {
+  let systemPrompt = env.SYSTEM_PROMPT?.trim() || null;
+  let visionPrompt = null;
+  if (env.USERS_DB) {
+    try {
+      const rows = await env.USERS_DB.prepare(
+        "SELECT key, value FROM system_settings WHERE key IN ('system_prompt', 'vision_prompt')"
+      ).all();
+      if (rows.results) {
+        rows.results.forEach((row) => {
+          if (row.key === "system_prompt" && row.value) systemPrompt = row.value;
+          if (row.key === "vision_prompt" && row.value) visionPrompt = row.value;
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to read system settings from DB", e);
+    }
+  }
   return new Response(
-    JSON.stringify({ prompt }),
+    JSON.stringify({
+      prompt: systemPrompt,
+      visionPrompt
+    }),
     {
       status: 200,
       headers: {
@@ -1839,109 +1837,116 @@ var routes = [
     modules: [onRequest3]
   },
   {
-    routePath: "/api/admin/users",
+    routePath: "/api/admin/prompts",
     mountPath: "/api/admin",
     method: "",
     middlewares: [],
     modules: [onRequest4]
   },
   {
-    routePath: "/api/auth/google",
-    mountPath: "/api/auth",
+    routePath: "/api/admin/users",
+    mountPath: "/api/admin",
     method: "",
     middlewares: [],
     modules: [onRequest5]
   },
   {
-    routePath: "/api/auth/me",
+    routePath: "/api/auth/google",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
     modules: [onRequest6]
   },
   {
-    routePath: "/api/auth/signin",
+    routePath: "/api/auth/me",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
     modules: [onRequest7]
   },
   {
-    routePath: "/api/auth/signout",
+    routePath: "/api/auth/signin",
     mountPath: "/api/auth",
     method: "",
     middlewares: [],
     modules: [onRequest8]
   },
   {
+    routePath: "/api/auth/signout",
+    mountPath: "/api/auth",
+    method: "",
+    middlewares: [],
+    modules: [onRequest9]
+  },
+  {
     routePath: "/api/keys/ollama",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest9]
+    modules: [onRequest10]
   },
   {
     routePath: "/api/ollama/generate",
     mountPath: "/api/ollama",
     method: "",
     middlewares: [],
-    modules: [onRequest10]
+    modules: [onRequest11]
   },
   {
     routePath: "/api/ollama/test",
     mountPath: "/api/ollama",
     method: "",
     middlewares: [],
-    modules: [onRequest11]
+    modules: [onRequest12]
   },
   {
     routePath: "/api/examples/:id",
     mountPath: "/api/examples",
     method: "",
     middlewares: [],
-    modules: [onRequest12]
+    modules: [onRequest13]
   },
   {
     routePath: "/api/keys/:id",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest13]
+    modules: [onRequest14]
   },
   {
     routePath: "/api/sources/:id",
     mountPath: "/api/sources",
     method: "",
     middlewares: [],
-    modules: [onRequest14]
+    modules: [onRequest15]
   },
   {
     routePath: "/api/examples",
     mountPath: "/api/examples",
     method: "",
     middlewares: [],
-    modules: [onRequest15]
+    modules: [onRequest16]
   },
   {
     routePath: "/api/keys",
     mountPath: "/api/keys",
     method: "",
     middlewares: [],
-    modules: [onRequest16]
+    modules: [onRequest17]
   },
   {
     routePath: "/api/sources",
     mountPath: "/api/sources",
     method: "",
     middlewares: [],
-    modules: [onRequest17]
+    modules: [onRequest18]
   },
   {
     routePath: "/api/system-prompt",
     mountPath: "/api",
     method: "",
     middlewares: [],
-    modules: [onRequest18]
+    modules: [onRequest19]
   }
 ];
 
@@ -2432,7 +2437,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-B71o1s/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-urmDMv/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2464,7 +2469,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-B71o1s/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-urmDMv/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

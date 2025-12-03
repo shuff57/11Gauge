@@ -307,6 +307,7 @@ export default function App() {
     }
   }, [isAdminUser, selectedSourceIds.length]);
 
+  // Load global system prompts from DB
   useEffect(() => {
     let active = true;
     const loadSystemPrompt = async () => {
@@ -314,10 +315,22 @@ export default function App() {
         const response = await fetch('/api/system-prompt');
         if (!response.ok) return;
         const data = await response.json().catch(() => null);
-        if (!active || !data?.prompt) return;
+        if (!active || !data) return;
+        
         setSettings((prev) => {
-          if (prev.systemPrompt === data.prompt) return prev;
-          return { ...prev, systemPrompt: data.prompt };
+          const next = { ...prev };
+          let changed = false;
+          
+          if (data.prompt && prev.systemPrompt !== data.prompt) {
+            next.systemPrompt = data.prompt;
+            changed = true;
+          }
+          if (data.visionPrompt && prev.visionPrompt !== data.visionPrompt) {
+            next.visionPrompt = data.visionPrompt;
+            changed = true;
+          }
+          
+          return changed ? next : prev;
         });
       } catch (err) {
         console.warn('Failed to load system prompt', err);

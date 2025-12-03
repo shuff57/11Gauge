@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users } from 'lucide-react';
+import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users, FileText, RotateCcw } from 'lucide-react';
 import { AppSettings, ModelProvider, SessionUser } from '../types';
-import { MODEL_LABELS } from '../constants';
+import { MODEL_LABELS, DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from '../constants';
 import { testConnection } from '../services/llm';
 import { UserManagementPanel } from './UserManagementPanel';
 
 type ProviderSlug = 'ollama' | 'gemini' | 'openai';
-type Tab = 'keys' | 'users';
+type Tab = 'keys' | 'users' | 'prompts';
 
 interface SavedKeySummary {
   id: number;
@@ -60,6 +60,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
+  const [isSavingPrompts, setIsSavingPrompts] = useState(false);
+  const [promptsMessage, setPromptsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const fetchSavedKeysFromApi = React.useCallback(async (): Promise<SavedKeySummary[]> => {
     if (!user) return [];
@@ -261,6 +263,32 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     setKeyForm((prev) => ({ ...prev, label: value }));
   };
 
+  const handleSavePrompts = async () => {
+    setIsSavingPrompts(true);
+    setPromptsMessage(null);
+    try {
+      const response = await fetch('/api/admin/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPrompt: settings.systemPrompt,
+          visionPrompt: settings.visionPrompt
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save prompts');
+      }
+      
+      setPromptsMessage({ type: 'success', text: 'Global prompts updated successfully.' });
+      setTimeout(() => setPromptsMessage(null), 3000);
+    } catch (err: any) {
+      setPromptsMessage({ type: 'error', text: err.message || 'Failed to save prompts.' });
+    } finally {
+      setIsSavingPrompts(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -305,12 +333,95 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                 <Users className="w-3.5 h-3.5" />
                 Manage Users
               </button>
+              <button
+                onClick={() => setActiveTab('prompts')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
+                  activeTab === 'prompts' 
+                    ? 'border-white text-white' 
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                System Prompts
+              </button>
             </div>
           )}
 
           <div className="p-3 space-y-2 overflow-y-auto custom-scrollbar flex-1">
             {activeTab === 'users' && user.isAdmin ? (
               <UserManagementPanel user={user} />
+            ) : activeTab === 'prompts' && user.isAdmin ? (
+              <div className="space-y-6 p-1">
+                {/* Vision Prompt Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-medium text-white">Vision Prompt (Step 1)</h3>
+                      <p className="text-[10px] text-zinc-400">
+                        Controls how the vision model analyzes the image/video frames. Must output JSON.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => onUpdate({ ...settings, visionPrompt: null })}
+                      className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+                      title="Reset to default vision prompt"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset Default
+                    </button>
+                  </div>
+                  <textarea
+                    value={settings.visionPrompt ?? DEFAULT_VISION_PROMPT}
+                    onChange={(e) => onUpdate({ ...settings, visionPrompt: e.target.value })}
+                    className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
+                    spellCheck={false}
+                  />
+                </div>
+
+                {/* Reasoning Prompt Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-medium text-white">Reasoning Prompt (Step 2)</h3>
+                      <p className="text-[10px] text-zinc-400">
+                        Controls how the reasoning model interprets the vision data and grades the student.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => onUpdate({ ...settings, systemPrompt: null })}
+                      className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+                      title="Reset to default reasoning prompt"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset Default
+                    </button>
+                  </div>
+                  <textarea
+                    value={settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT}
+                    onChange={(e) => onUpdate({ ...settings, systemPrompt: e.target.value })}
+                    className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+                  <div className="text-[10px]">
+                    {promptsMessage && (
+                      <span className={promptsMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}>
+                        {promptsMessage.text}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleSavePrompts}
+                    disabled={isSavingPrompts}
+                    className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-medium rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50"
+                  >
+                    {isSavingPrompts && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Save Global Defaults
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="space-y-2">
               <div className="space-y-1">
