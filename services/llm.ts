@@ -117,9 +117,10 @@ const analyzeWithOllama = async (
   onProgress?: ProgressCallback
 ): Promise<string> => {
   const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
-  if (!configuredUrl) {
-    throw new Error("Please configure your Ollama Cloud URL in settings or .env.");
-  }
+  // We allow empty URL here so the backend can use its own OLLAMA_URL env var if available.
+  // if (!configuredUrl) {
+  //   throw new Error("Please configure your Ollama Cloud URL in settings or .env.");
+  // }
 
   const apiKey = settings.ollamaKey?.trim() || process.env.OLLAMA_API_KEY || '';
   const images = payload.frames.map((frame) => {
@@ -335,7 +336,7 @@ const fetchOllamaGenerate = async (
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params)
     });    if (!response.ok) {
-      const failure = await response.json().catch(() => undefined);
+      const failure = await response.json().catch(() => undefined) as any;
       throw new Error(failure?.error || `Request failed (${response.status}).`);
     }
 
@@ -430,9 +431,10 @@ const fetchOllamaGenerate = async (
 
 const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
   const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
-  if (!configuredUrl) {
-    throw new Error("URL is required. Provide it in settings or .env.");
-  }
+  // Allow empty URL to fall back to backend env var
+  // if (!configuredUrl) {
+  //   throw new Error("URL is required. Provide it in settings or .env.");
+  // }
 
   const apiKey = settings.ollamaKey?.trim() || process.env.OLLAMA_API_KEY || '';
 
@@ -447,7 +449,7 @@ const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => undefined);
+    const data = await response.json().catch(() => undefined) as any;
     console.error("Ollama Test Failed:", { status: response.status, data });
     throw new Error(data?.error || `Connection failed (${response.status}). Check your API key and URL.`);
   }
