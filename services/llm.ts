@@ -141,7 +141,12 @@ const analyzeWithOllama = async (
     // STEP 1: Vision Extraction
     onProgress?.({ phase: 'awaiting-model', message: 'Analyzing visual features (Step 1/2)...' });
     
-    const visionPrompt = `Analyze the provided image of a weld. Provide a detailed, objective visual description of the following aspects:
+    const visionPrompt = `Analyze the provided image of a weld. You are a forensic welding inspector. Your job is to find every flaw, no matter how small.
+
+CRITICAL INSTRUCTION:
+Do not be polite. Do not overlook minor defects. If you see any irregularity, describe it explicitly as a defect.
+
+Analyze these aspects:
 1. Bead Consistency (width, height, straightness)
 2. Penetration & Fusion (toes, tie-in)
 3. Surface Profile (convexity, concavity)
@@ -184,27 +189,27 @@ Return ONLY this JSON structure:
   "student_observations": [
     {
       "criterion": "Bead Consistency",
-      "observed_condition": "Detailed observation of width/height/straightness",
+      "observed_condition": "Detailed observation of width/height/straightness. Be critical.",
       "matches_reference": "pass | partial | fail"
     },
     {
       "criterion": "Penetration & Fusion",
-      "observed_condition": "Detailed observation of toes and tie-in",
+      "observed_condition": "Detailed observation of toes and tie-in. Look for cold lap.",
       "matches_reference": "pass | partial | fail"
     },
     {
       "criterion": "Profile & Contour",
-      "observed_condition": "Detailed observation of crown/flatness",
+      "observed_condition": "Detailed observation of crown/flatness.",
       "matches_reference": "pass | partial | fail"
     },
     {
       "criterion": "Ripple Pattern",
-      "observed_condition": "Detailed observation of ripple spacing/smoothness",
+      "observed_condition": "Detailed observation of ripple spacing/smoothness.",
       "matches_reference": "pass | partial | fail"
     },
     {
       "criterion": "Heat Control",
-      "observed_condition": "Detailed observation of HAZ and undercut",
+      "observed_condition": "Detailed observation of HAZ and undercut.",
       "matches_reference": "pass | partial | fail"
     }
   ],
@@ -227,11 +232,12 @@ Return ONLY this JSON structure:
       think: false, // Vision models usually don't think
       ragQuery: null // Disable RAG for vision step
     }, (partial) => {
-      // Optional: Show vision progress in debug or partial?
-      // For now, we just buffer it.
+      // Stream vision output to the "Thinking" UI
+      onThinking?.(`### Vision Analysis (Step 1/2)\n\`\`\`json\n${partial}\n\`\`\``);
     });
 
     const visualFindings = visionResponse.text;
+    const visionTrace = `### Vision Analysis (Step 1/2)\n\`\`\`json\n${visualFindings}\n\`\`\``;
     console.log("--- [Pipeline] Step 1 (Vision) Complete ---");
     console.log("Visual Findings JSON:", visualFindings);
 
@@ -286,6 +292,11 @@ ${visualFindings}
 **TASK:**
 Act as the Welding Instructor defined in your system prompt. Use the \`student_observations\` and \`detected_defects\` from the JSON above to populate your report following the structure defined in your system instructions.
 
+CRITICAL SCORING INSTRUCTION:
+You must trust the "observed_condition" and "detected_defects" in the JSON.
+- If the JSON mentions "undercut", "porosity", or "irregular", you MUST score that category 2 or lower.
+- Do not be lenient. If the vision model saw a defect, it exists.
+
 Based on the visual analysis above and the provided context, evaluate the weld according to this rubric. Provide the scores and feedback.`;
 
     console.log("--- [Pipeline] Step 2 (Reasoning) Starting ---");
@@ -302,7 +313,10 @@ Based on the visual analysis above and the provided context, evaluate the weld a
       stream: true,
       think: settings.ollamaThinking,
       ragQuery: ragQuery // Inject dynamic query based on defects
-    }, onPartial, onThinking, onMetrics);
+    }, onPartial, (thinkingText) => {
+      // Append reasoning thinking to vision trace
+      onThinking?.(`${visionTrace}\n\n### Reasoning (Step 2/2)\n${thinkingText}`);
+    }, onMetrics);
 
     return finalResponse.text;
   }

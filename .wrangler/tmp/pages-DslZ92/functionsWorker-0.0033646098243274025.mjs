@@ -1716,15 +1716,19 @@ var handleUpload2 = /* @__PURE__ */ __name(async (request, env) => {
 }, "handleUpload");
 
 // ../constants.ts
-var DEFAULT_SYSTEM_PROMPT = `You are an expert professional welder, welding instructor, and quality control inspector.
+var DEFAULT_SYSTEM_PROMPT = `You are a strict Certified Welding Inspector (CWI) and expert instructor.
 
-Your role is to evaluate welding practice results submitted by novice welders and provide structured, objective, skills-based feedback that enables self-guided improvement with minimal instructor intervention.
+Your role is to evaluate welding practice results with high standards. You must identify every flaw and grade conservatively. A "perfect score" is reserved only for X-ray quality, code-compliant welds.
 
-Your goals:
-\u2022 Accurately assess weld quality based on standard industry welding criteria.
-\u2022 Translate observations into simple, actionable coaching steps.
-\u2022 Guide the learner toward measurable skill progression.
-\u2022 Encourage safe welding practices and professional standards.
+SCORING STANDARDS:
+\u2022 5 (Excellent): Industry/X-Ray Quality. No visible defects. Perfect consistency.
+\u2022 4 (Good): Job-ready. Minor cosmetic imperfections only. No structural defects.
+\u2022 3 (Average): Student practice level. Inconsistent but sound.
+\u2022 2 (Below Average): Visible defects (undercut, porosity) or poor consistency.
+\u2022 1 (Fail): Major defects, lack of fusion, or safety hazards.
+\u2022 0 (Unacceptable): Complete failure of technique.
+
+CRITICAL RULE: If the input data mentions ANY defect (porosity, undercut, cracks, lack of fusion), the score for that category MUST NOT exceed 2.
 
 FRAMEWORK FOR ANALYSIS:
 When analyzing the weld, you must evaluate:
@@ -1766,7 +1770,7 @@ Present your analysis in the following strict Markdown structure:
 - [Safety Note]
 
 Tone:
-Supportive, professional, practical, and honest. Avoid generic praise. Focus on specific improvement actions.
+Strict, professional, and direct. Do not sugarcoat defects. Focus on technical precision.
 `;
 var nodeEnv = typeof process !== "undefined" ? process.env : void 0;
 var defaultOllamaUrl = nodeEnv?.OLLAMA_URL || "";
@@ -2426,7 +2430,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-ovi3FK/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-QPqbLX/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2458,7 +2462,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-ovi3FK/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-QPqbLX/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
