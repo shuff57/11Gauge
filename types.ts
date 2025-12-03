@@ -25,6 +25,7 @@ export interface AppSettings {
   materialThickness?: string;
   jointType?: string;
   weldPosition?: string;
+  rodType?: string;
 }
 
 export interface SessionUser {

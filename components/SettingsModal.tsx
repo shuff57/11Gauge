@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X, ExternalLink, Layout, Database, FileText } from 'lucide-react';
 import { AppSettings, ModelProvider, SessionUser } from '../types';
-import { MODEL_LABELS, GEMINI_MODELS } from '../constants';
+import { MODEL_LABELS, GEMINI_MODELS, MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS, ROD_TYPES } from '../constants';
 import { testConnection, getOllamaKey } from '../services/llm';
 
 type ProviderSlug = 'ollama' | 'gemini' | 'openai';
@@ -516,7 +516,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
                       <option value="">Select Material...</option>
-                      {['Carbon Steel', 'Stainless Steel', 'Aluminum', 'Titanium', 'Cast Iron', 'Copper'].map(m => (
+                      {MATERIAL_TYPES.map(m => (
                         <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
@@ -530,16 +530,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
                       <option value="">Select Process...</option>
-                      {[
-                        { code: 'GMAW', name: 'MIG (Gas Metal Arc)' },
-                        { code: 'GTAW', name: 'TIG (Gas Tungsten Arc)' },
-                        { code: 'SMAW', name: 'Stick (Shielded Metal Arc)' },
-                        { code: 'FCAW', name: 'Flux Core' }
-                      ].map(m => (
+                      {WELD_PROCESSES.map(m => (
                         <option key={m.code} value={m.code}>{m.name} ({m.code})</option>
                       ))}
                     </select>
                   </div>
+
+                  {settings.weldProcess === 'SMAW' && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Rod Type</label>
+                      <select
+                        value={settings.rodType || ''}
+                        onChange={(e) => handleChange('rodType', e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                      >
+                        <option value="">Select Rod...</option>
+                        {ROD_TYPES.map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Material Thickness</label>
@@ -549,7 +560,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
                       <option value="">Select Thickness...</option>
-                      {['24 Gauge', '22 Gauge', '20 Gauge', '18 Gauge', '16 Gauge', '14 Gauge', '1/8"', '3/16"', '1/4"', '3/8"', '1/2"'].map(m => (
+                      {MATERIAL_THICKNESSES.map(m => (
                         <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
@@ -563,7 +574,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
                       <option value="">Select Joint Type...</option>
-                      {['Butt Joint', 'Tee Joint', 'Lap Joint', 'Corner Joint', 'Edge Joint'].map(m => (
+                      {JOINT_TYPES.map(m => (
                         <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
@@ -577,22 +588,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
                       <option value="">Select Position...</option>
-                      <optgroup label="Fillet Welds">
-                        <option value="1F">1F (Flat)</option>
-                        <option value="2F">2F (Horizontal)</option>
-                        <option value="3F">3F (Vertical)</option>
-                        <option value="4F">4F (Overhead)</option>
-                      </optgroup>
-                      <optgroup label="Groove Welds">
-                        <option value="1G">1G (Flat)</option>
-                        <option value="2G">2G (Horizontal)</option>
-                        <option value="3G">3G (Vertical)</option>
-                        <option value="4G">4G (Overhead)</option>
-                      </optgroup>
-                      <optgroup label="Pipe Welds">
-                        <option value="5G">5G (Pipe Fixed, Horizontal)</option>
-                        <option value="6G">6G (Pipe Fixed, 45°)</option>
-                      </optgroup>
+                      {WELD_POSITIONS.map(group => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.options.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </optgroup>
+                      ))}
                     </select>
                   </div>
 

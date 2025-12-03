@@ -6,7 +6,8 @@ import {
   WELD_PROCESSES, 
   MATERIAL_THICKNESSES, 
   JOINT_TYPES, 
-  WELD_POSITIONS 
+  WELD_POSITIONS,
+  ROD_TYPES
 } from '../constants';
 
 interface SetupModalProps {
@@ -79,6 +80,22 @@ export const SetupModal: React.FC<SetupModalProps> = ({
                       ))}
                     </select>
                   </div>
+
+                  {settings.weldProcess === 'SMAW' && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Rod Type</label>
+                      <select
+                        value={settings.rodType || ''}
+                        onChange={(e) => handleChange('rodType', e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                      >
+                        <option value="">Select Rod...</option>
+                        {ROD_TYPES.map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Material Thickness</label>

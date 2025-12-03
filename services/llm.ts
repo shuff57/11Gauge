@@ -233,6 +233,7 @@ const analyzeWithOllama = async (
     if (settings.materialThickness) materialContext.push(`Material Thickness: ${settings.materialThickness}`);
     if (settings.jointType) materialContext.push(`Joint Type: ${settings.jointType}`);
     if (settings.weldPosition) materialContext.push(`Weld Position: ${settings.weldPosition}`);
+    if (settings.rodType && settings.weldProcess === 'SMAW') materialContext.push(`Rod Type: ${settings.rodType}`);
 
     if (materialContext.length > 0) {
       reasoningPrompt += `CONTEXT:\nThe user has provided the following specifications for this weld:\n${materialContext.join('\n')}\n\n`;
@@ -293,6 +294,7 @@ Based on the visual analysis above and the provided context, evaluate the weld a
   if (settings.materialThickness) materialContext.push(`Material Thickness: ${settings.materialThickness}`);
   if (settings.jointType) materialContext.push(`Joint Type: ${settings.jointType}`);
   if (settings.weldPosition) materialContext.push(`Weld Position: ${settings.weldPosition}`);
+  if (settings.rodType && settings.weldProcess === 'SMAW') materialContext.push(`Rod Type: ${settings.rodType}`);
 
   if (materialContext.length > 0) {
     promptPrefix += `\n\nCONTEXT:\nThe user has provided the following specifications for this weld:\n${materialContext.join('\n')}\n\nPlease use these specifications to grade the weld accordingly.`;

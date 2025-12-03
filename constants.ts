@@ -222,6 +222,8 @@ export const WELD_PROCESSES = [
   { code: 'FCAW', name: 'Flux Core' }
 ];
 
+export const ROD_TYPES = ['6010 (Fast Freeze)', '6011', '6013', '7018 (Drag)', '7024'];
+
 export const MATERIAL_THICKNESSES = ['24 Gauge', '22 Gauge', '20 Gauge', '18 Gauge', '16 Gauge', '14 Gauge', '1/8"', '3/16"', '1/4"', '3/8"', '1/2"'];
 
 export const JOINT_TYPES = ['Stringer Bead', 'Bead Pad','Butt Joint', 'Tee Joint', 'Lap Joint', 'Corner Joint', 'Edge Joint'];
