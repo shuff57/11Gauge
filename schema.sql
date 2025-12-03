@@ -81,3 +81,8 @@ CREATE TABLE IF NOT EXISTS example_image_chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_example_image_chunks_image ON example_image_chunks(image_id);
+
+CREATE TABLE IF NOT EXISTS admin_allowlist (
+  email TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);

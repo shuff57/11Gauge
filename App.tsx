@@ -505,7 +505,7 @@ export default function App() {
       const session = sessionStorage.getItem('has_used_demo');
       
       if (local || session) {
-        setError("Demo limit reached. Please sign in or add your own API key in Manage Keys.");
+        setError("Demo limit reached. Please sign in or add your own API key in the Admin menu.");
         setHasUsedDemo(true);
         return;
       }
@@ -714,7 +714,7 @@ export default function App() {
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
                   >
-                    Manage Keys
+                    Admin
                   </button>
                   <button
                     onClick={async () => {

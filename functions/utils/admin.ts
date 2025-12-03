@@ -1,5 +1,6 @@
 interface AdminEnv {
   ADMIN_EMAILS?: string;
+  USERS_DB?: D1Database;
 }
 
 const parseAdminEmails = (raw?: string): string[] => {
@@ -10,21 +11,37 @@ const parseAdminEmails = (raw?: string): string[] => {
     .filter(Boolean);
 };
 
-export const isAdminEmail = (env: AdminEnv, email?: string | null): boolean => {
+export const isAdminEmail = async (env: AdminEnv, email?: string | null): Promise<boolean> => {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   if (!normalized) return false;
-  const admins = parseAdminEmails(env.ADMIN_EMAILS);
-  return admins.includes(normalized);
+
+  // Check env var first (fallback/bootstrap)
+  const envAdmins = parseAdminEmails(env.ADMIN_EMAILS);
+  if (envAdmins.includes(normalized)) return true;
+
+  // Check DB
+  if (env.USERS_DB) {
+    try {
+      const result = await env.USERS_DB.prepare('SELECT 1 FROM admin_allowlist WHERE email = ?')
+        .bind(normalized)
+        .first();
+      if (result) return true;
+    } catch (e) {
+      console.warn('Failed to check admin DB', e);
+    }
+  }
+
+  return false;
 };
 
-export const withAdminFlag = <T extends { email: string }>(
+export const withAdminFlag = async <T extends { email: string }>(
   env: AdminEnv,
   user: T
-): T & { isAdmin: boolean } => {
+): Promise<T & { isAdmin: boolean }> => {
   return {
     ...user,
-    isAdmin: isAdminEmail(env, user.email)
+    isAdmin: await isAdminEmail(env, user.email)
   };
 };
 

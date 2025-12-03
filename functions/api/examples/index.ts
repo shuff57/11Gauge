@@ -66,7 +66,7 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
   if (!user) {
     return json({ error: 'Not authenticated' }, { status: 401 });
   }
-  if (!isAdminEmail(env, user.email)) {
+  if (!(await isAdminEmail(env, user.email))) {
     return json({ error: 'Forbidden' }, { status: 403 });
   }
   if (!env.PRIMARY_SOURCES) {

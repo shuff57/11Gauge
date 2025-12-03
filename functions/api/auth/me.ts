@@ -19,5 +19,5 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (!user) {
     return json({ user: null }, { status: 401 });
   }
-  return json({ user: withAdminFlag(env, user) });
+  return json({ user: await withAdminFlag(env, user) });
 };

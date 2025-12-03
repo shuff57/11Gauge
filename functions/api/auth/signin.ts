@@ -82,7 +82,7 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
       const headers: HeadersInit = token ? { 'Set-Cookie': buildSessionCookie(token, { secure }) } : {};
       return json({ 
         success: true, 
-        user: withAdminFlag(env, { id: existingUser.id, email: existingUser.email }),
+        user: await withAdminFlag(env, { id: existingUser.id, email: existingUser.email }),
         isNewUser: false
       }, { headers });
     }
@@ -100,7 +100,7 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
     const headers: HeadersInit = token ? { 'Set-Cookie': buildSessionCookie(token, { secure }) } : {};
     return json({ 
       success: true, 
-      user: withAdminFlag(env, { id: result.meta.last_row_id, email: emailLower }),
+      user: await withAdminFlag(env, { id: result.meta.last_row_id, email: emailLower }),
       isNewUser: true
     }, { headers });
   } catch (err: any) {

@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users } from 'lucide-react';
 import { AppSettings, ModelProvider, SessionUser } from '../types';
 import { MODEL_LABELS } from '../constants';
 import { testConnection } from '../services/llm';
+import { UserManagementPanel } from './UserManagementPanel';
 
 type ProviderSlug = 'ollama' | 'gemini' | 'openai';
+type Tab = 'keys' | 'users';
 
 interface SavedKeySummary {
   id: number;
@@ -43,6 +45,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
   onUpdate,
   onKeysUpdated
 }) => {
+  const [activeTab, setActiveTab] = useState<Tab>('keys');
   const [savedKeys, setSavedKeys] = useState<SavedKeySummary[]>([]);
   const [loadingSavedKeys, setLoadingSavedKeys] = useState(false);
   const [savedKeysError, setSavedKeysError] = useState<string | null>(null);
@@ -278,8 +281,38 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
             </button>
           </div>
 
+          {user.isAdmin && (
+            <div className="flex items-center px-4 border-b border-zinc-800 bg-zinc-900/50">
+              <button
+                onClick={() => setActiveTab('keys')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
+                  activeTab === 'keys' 
+                    ? 'border-white text-white' 
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                API Keys
+              </button>
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
+                  activeTab === 'users' 
+                    ? 'border-white text-white' 
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Manage Users
+              </button>
+            </div>
+          )}
+
           <div className="p-3 space-y-2 overflow-y-auto custom-scrollbar flex-1">
-            <div className="space-y-2">
+            {activeTab === 'users' && user.isAdmin ? (
+              <UserManagementPanel user={user} />
+            ) : (
+              <div className="space-y-2">
               <div className="space-y-1">
                 <label className="text-xs text-zinc-300">Provider</label>
                 <select
@@ -436,6 +469,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
