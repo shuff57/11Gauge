@@ -284,38 +284,7 @@ ${visualFindings}
 \`\`\`
 
 **TASK:**
-Act as the Welding Instructor defined in your system prompt. Use the \`student_observations\` and \`detected_defects\` from the JSON above to populate your report.
-
-**REQUIRED OUTPUT FORMAT:**
-
-Generate a Markdown response exactly in this structure:
-
-### Detailed Assessment
-| Criterion | Score (0–4) | Pass/Fail | Notes |
-|-----------|-------------|-----------|-------|
-| Bead Consistency | [Score] | [Pass/Fail] | [Specific observation] |
-| Penetration & Fusion | [Score] | [Pass/Fail] | [Specific observation] |
-| Profile & Contour | [Score] | [Pass/Fail] | [Specific observation] |
-| Ripple Pattern | [Score] | [Pass/Fail] | [Specific observation] |
-| Heat Control | [Score] | [Pass/Fail] | [Specific observation] |
-| Defect Check | [Score] | [Pass/Fail] | [List defects or "None"] |
-
-### Summary Report
-**Final Grade:** [Letter Grade] ([Total Score]/24)
-**Key Strengths:**
-- [Strength 1]
-- [Strength 2]
-
-**Primary Issues:**
-- [Issue 1]
-- [Issue 2]
-
-**Next Practice Strategies:**
-- [Strategy 1]
-- [Strategy 2]
-
-**Safety Notes:**
-- [Safety Note]
+Act as the Welding Instructor defined in your system prompt. Use the \`student_observations\` and \`detected_defects\` from the JSON above to populate your report following the structure defined in your system instructions.
 
 Based on the visual analysis above and the provided context, evaluate the weld according to this rubric. Provide the scores and feedback.`;
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Loader2, AlertCircle, BrainCircuit, Activity, Layout } from 'lucide-react';
 import { AnalysisProgress, OllamaMetrics, AppSettings } from '../types';
 
@@ -87,7 +88,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reaso
           </div>
         </details>
       )}
-      <ReactMarkdown>{result}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown>
       {loading && (
         <div className="mt-4 flex items-center gap-2 text-zinc-500 animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin" />
