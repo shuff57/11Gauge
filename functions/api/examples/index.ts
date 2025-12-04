@@ -144,7 +144,7 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
       materialThickness,
       jointType,
       weldPosition,
-      structuredAnalysis
+      structuredAnalysis: structuredAnalysis ? JSON.stringify(structuredAnalysis) : null
     });
 
     // Generate embedding for AI description if provided

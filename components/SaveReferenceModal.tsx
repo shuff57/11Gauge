@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, UploadCloud, X, Plus, Trash2 } from 'lucide-react';
-import { ExampleImageLabel, AppSettings } from '../types';
+import { ExampleImageLabel, AppSettings, StructuredAnalysis, RubricObservation, RubricDefect } from '../types';
 import { uploadExampleImage } from '../services/exampleImages';
 import { MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS } from '../constants';
 
@@ -10,7 +10,7 @@ interface SaveReferenceModalProps {
   file: File;
   initialDescription?: string;
   settings?: AppSettings;
-  structuredAnalysis?: any;
+  structuredAnalysis?: StructuredAnalysis;
   onSuccess: () => void;
 }
 
@@ -45,8 +45,8 @@ const SEVERITY_LEVELS = ["minor", "moderate", "severe"];
 const MATCH_STATUSES = ["pass", "partial", "fail"];
 
 interface RubricFormProps {
-  data: any;
-  onChange: (data: any) => void;
+  data: StructuredAnalysis;
+  onChange: (data: StructuredAnalysis) => void;
 }
 
 const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
@@ -55,11 +55,11 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
   const overallGrade = data?.overall_grade || '';
   const feedback = data?.feedback || '';
 
-  const updateField = (field: string, value: string) => {
+  const updateField = (field: keyof StructuredAnalysis, value: string) => {
     onChange({ ...data, [field]: value });
   };
 
-  const updateObservation = (index: number, field: string, value: string) => {
+  const updateObservation = (index: number, field: keyof RubricObservation, value: string) => {
     const next = [...observations];
     next[index] = { ...next[index], [field]: value };
     onChange({ ...data, student_observations: next });
@@ -81,7 +81,7 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
     });
   };
 
-  const updateDefect = (index: number, field: string, value: string) => {
+  const updateDefect = (index: number, field: keyof RubricDefect, value: string) => {
     const next = [...defects];
     next[index] = { ...next[index], [field]: value };
     onChange({ ...data, detected_defects: next });
@@ -140,7 +140,7 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
           </button>
         </div>
         <div className="space-y-2">
-          {observations.map((obs: any, i: number) => (
+          {observations.map((obs: RubricObservation, i: number) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
               <div className="col-span-4 space-y-1">
                 <select
@@ -210,7 +210,7 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
           </button>
         </div>
         <div className="space-y-2">
-          {defects.map((def: any, i: number) => (
+          {defects.map((def: RubricDefect, i: number) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
               <div className="col-span-4 space-y-1">
                 <select
@@ -280,9 +280,39 @@ export const SaveReferenceModal: React.FC<SaveReferenceModalProps> = ({
   const [weldPosition, setWeldPosition] = useState(settings?.weldPosition || '');
   
   // Initialize with structuredAnalysis or a default empty structure
-  const [rubricData, setRubricData] = useState(
+  const [rubricData, setRubricData] = useState<StructuredAnalysis>(
     structuredAnalysis || { student_observations: [], detected_defects: [] }
   );
+  
+  // Update state when props change (e.g. analysis completes after mount)
+  useEffect(() => {
+    if (structuredAnalysis) {
+      setRubricData(structuredAnalysis);
+      // Also prefill description from feedback if available
+      if (structuredAnalysis.feedback && !description) {
+        setDescription(structuredAnalysis.feedback);
+      }
+    }
+  }, [structuredAnalysis]);
+
+  useEffect(() => {
+    if (initialDescription) {
+      setDescription(initialDescription);
+    }
+  }, [initialDescription]);
+
+  // Reset form when file changes
+  useEffect(() => {
+    setTitle('');
+    setLabel('good');
+    setError(null);
+    if (!structuredAnalysis) {
+      setRubricData({ student_observations: [], detected_defects: [] });
+    }
+    if (!initialDescription) {
+      setDescription('');
+    }
+  }, [file]);
   
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -380,16 +410,6 @@ export const SaveReferenceModal: React.FC<SaveReferenceModalProps> = ({
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600"
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-widest text-zinc-500">Description / Analysis Notes</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Detailed notes about this weld..."
-                className="w-full h-32 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 resize-none"
-              />
             </div>
 
             <div className="space-y-2">

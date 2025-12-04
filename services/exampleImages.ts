@@ -45,7 +45,7 @@ export const fetchExampleImages = async (label?: ExampleImageLabel): Promise<Exa
   if (response.status === 401) {
     throw new Error('Sign in to view example images.');
   }
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Unable to load example images.');
   }
@@ -94,7 +94,7 @@ export const uploadExampleImage = async (
     body: formData,
     credentials: 'include'
   });
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Failed to upload example image.');
   }
@@ -109,7 +109,7 @@ export const deleteExampleImage = async (id: string): Promise<void> => {
     method: 'DELETE',
     credentials: 'include'
   });
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Failed to delete example image.');
   }

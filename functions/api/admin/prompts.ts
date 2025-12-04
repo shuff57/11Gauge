@@ -1,6 +1,6 @@
 import { getSessionUser } from "../../utils/session";
 import { withAdminFlag, AdminEnv } from "../../utils/admin";
-import { DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from "../../../../constants";
+import type { D1Database } from "@cloudflare/workers-types";
 
 interface Env extends AdminEnv {
   USERS_DB: D1Database;

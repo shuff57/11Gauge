@@ -317,7 +317,7 @@ export default function App() {
       try {
         const response = await fetch('/api/system-prompt');
         if (!response.ok) return;
-        const data = await response.json().catch(() => null);
+        const data = await response.json().catch(() => null) as any;
         if (!active || !data) return;
         
         setSettings((prev) => {
@@ -414,7 +414,7 @@ export default function App() {
         }
         
         if (!response.ok) return;
-        const data = await response.json().catch(() => null);
+        const data = await response.json().catch(() => null) as any;
         if (!active) return;
         
         if (data?.user?.email) {

@@ -45,6 +45,7 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
       model,
       prompt: "Hello",
       stream: false,
+      timeout: 5000 // Fail fast for connection tests
     });
 
     return relayResponse(upstream);

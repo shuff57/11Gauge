@@ -5,12 +5,15 @@ import type {
   PrimarySourceChunk
 } from "../types";
 
+// @ts-ignore
 let cachedPdfjs: typeof import("pdfjs-dist/legacy/build/pdf") | null = null;
 
 const ensurePdfjs = async () => {
   if (cachedPdfjs) return cachedPdfjs;
   const [pdfModule, workerModule] = await Promise.all([
+    // @ts-ignore
     import("pdfjs-dist/legacy/build/pdf"),
+    // @ts-ignore
     import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")
   ]);
   pdfModule.GlobalWorkerOptions.workerSrc = workerModule.default;
@@ -149,7 +152,7 @@ const uploadManifest = async (
     credentials: 'include'
   });
 
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Failed to upload primary source.');
   }
@@ -166,7 +169,7 @@ export const fetchPrimarySources = async (): Promise<PrimarySourceSummary[]> => 
   if (response.status === 401) {
     throw new Error('Sign in to manage primary sources.');
   }
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Unable to load primary sources.');
   }
@@ -178,7 +181,7 @@ export const fetchPrimarySourceManifest = async (id: string): Promise<PrimarySou
     return chunkCache.get(id)!;
   }
   const response = await fetch(`/api/sources/${id}/chunks`, { credentials: 'include' });
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Unable to load source manifest.');
   }
@@ -195,7 +198,7 @@ export const deletePrimarySource = async (id: string): Promise<void> => {
     method: 'DELETE',
     credentials: 'include'
   });
-  const payload = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as any;
   if (!response.ok) {
     throw new Error(payload?.error || 'Failed to delete primary source.');
   }

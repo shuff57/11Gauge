@@ -68,6 +68,27 @@ export interface PrimarySourceUploadManifest {
 
 export type ExampleImageLabel = 'good' | 'bad';
 
+export interface RubricObservation {
+  criterion: string;
+  observed_condition: string;
+  matches_reference: string; // 'pass' | 'fail' | 'partial'
+  score?: string;
+  variance_estimate?: string;
+}
+
+export interface RubricDefect {
+  type: string;
+  severity: string; // 'minor' | 'moderate' | 'severe'
+  location: string;
+}
+
+export interface StructuredAnalysis {
+  overall_grade?: string;
+  feedback?: string;
+  student_observations: RubricObservation[];
+  detected_defects: RubricDefect[];
+}
+
 export interface ExampleImageSummary {
   id: string;
   label: ExampleImageLabel;
@@ -83,7 +104,7 @@ export interface ExampleImageSummary {
   materialThickness?: string;
   jointType?: string;
   weldPosition?: string;
-  structuredAnalysis?: any;
+  structuredAnalysis?: StructuredAnalysis;
 }
 
 export interface ExampleImageUploadInput {
@@ -96,7 +117,7 @@ export interface ExampleImageUploadInput {
   jointType?: string;
   weldPosition?: string;
   aiDescription?: string;
-  structuredAnalysis?: any;
+  structuredAnalysis?: StructuredAnalysis;
 }
 
 export type MediaKind = 'image' | 'video';

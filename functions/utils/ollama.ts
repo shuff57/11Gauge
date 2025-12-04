@@ -65,21 +65,37 @@ interface ForwardOptions {
   images?: string[];
   stream?: boolean;
   think?: boolean | string;
+  timeout?: number;
 }
 
 const forwardToOllama = async (opts: ForwardOptions): Promise<Response> => {
-  const response = await fetch(`${opts.baseUrl}/api/generate`, {
-    method: "POST",
-    headers: buildHeaders(opts.apiKey),
-    body: JSON.stringify({
-      model: opts.model,
-      prompt: opts.prompt,
-      images: opts.images,
-      stream: Boolean(opts.stream),
-      think: opts.think,
-    })
-  });
-  return response;
+  const controller = new AbortController();
+  // Default to 5 minutes for generation, but allow override
+  const timeoutMs = opts.timeout || 300000; 
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${opts.baseUrl}/api/generate`, {
+      method: "POST",
+      headers: buildHeaders(opts.apiKey),
+      body: JSON.stringify({
+        model: opts.model,
+        prompt: opts.prompt,
+        images: opts.images,
+        stream: Boolean(opts.stream),
+        think: opts.think,
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Ollama request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
 };
 
 const relayResponse = (response: Response, extraHeaders?: Record<string, string>): Response => {
@@ -103,28 +119,44 @@ interface EmbeddingOptions {
   apiKey?: string;
   model: string;
   prompt: string;
+  timeout?: number;
 }
 
 const generateEmbedding = async (opts: EmbeddingOptions): Promise<number[]> => {
-  const response = await fetch(`${opts.baseUrl}/api/embeddings`, {
-    method: "POST",
-    headers: buildHeaders(opts.apiKey),
-    body: JSON.stringify({
-      model: opts.model,
-      prompt: opts.prompt,
-    })
-  });
-  
-  if (!response.ok) {
-    const err = await response.text().catch(() => response.statusText);
-    throw new Error(`Embedding failed (${response.status}): ${err}`);
-  }
+  const controller = new AbortController();
+  const timeoutMs = opts.timeout || 30000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const data = await response.json() as { embedding: number[] };
-  if (!Array.isArray(data.embedding)) {
-    throw new Error("Invalid embedding response format");
+  try {
+    const response = await fetch(`${opts.baseUrl}/api/embeddings`, {
+      method: "POST",
+      headers: buildHeaders(opts.apiKey),
+      body: JSON.stringify({
+        model: opts.model,
+        prompt: opts.prompt,
+      }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const err = await response.text().catch(() => response.statusText);
+      throw new Error(`Embedding failed (${response.status}): ${err}`);
+    }
+
+    const data = await response.json() as { embedding: number[] };
+    if (!Array.isArray(data.embedding)) {
+      throw new Error("Invalid embedding response format");
+    }
+    return data.embedding;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Embedding request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
   }
-  return data.embedding;
 };
 
 export {
