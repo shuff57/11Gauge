@@ -186,7 +186,8 @@ var mapRow = /* @__PURE__ */ __name2((row) => {
     weld_process: row.weld_process ?? null,
     material_thickness: row.material_thickness ?? null,
     joint_type: row.joint_type ?? null,
-    weld_position: row.weld_position ?? null
+    weld_position: row.weld_position ?? null,
+    structured_analysis: row.structured_analysis ?? null
   };
 }, "mapRow");
 var createExampleImageRecord = /* @__PURE__ */ __name2(async (env, input) => {
@@ -197,8 +198,8 @@ var createExampleImageRecord = /* @__PURE__ */ __name2(async (env, input) => {
       original_name, mime_type, size_bytes,
       object_key, created_at,
       material_type, weld_process, material_thickness,
-      joint_type, weld_position
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      joint_type, weld_position, structured_analysis
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     input.id,
     input.userId,
@@ -214,7 +215,8 @@ var createExampleImageRecord = /* @__PURE__ */ __name2(async (env, input) => {
     input.weldProcess ?? null,
     input.materialThickness ?? null,
     input.jointType ?? null,
-    input.weldPosition ?? null
+    input.weldPosition ?? null,
+    input.structuredAnalysis ?? null
   ).run();
   const record = await getExampleImageRecord(env, input.id);
   if (!record) {
@@ -252,21 +254,31 @@ var createExampleImageChunk = /* @__PURE__ */ __name2(async (env, imageId, textC
      VALUES (?, ?, ?, ?, ?)`
   ).bind(id, imageId, textContent, embeddingJson, createdAt).run();
 }, "createExampleImageChunk");
-var toExampleImageSummary = /* @__PURE__ */ __name2((record) => ({
-  id: record.id,
-  label: record.label,
-  title: record.title,
-  description: record.description,
-  originalName: record.original_name,
-  mimeType: record.mime_type,
-  sizeBytes: record.size_bytes,
-  createdAt: record.created_at,
-  materialType: record.material_type,
-  weldProcess: record.weld_process,
-  materialThickness: record.material_thickness,
-  jointType: record.joint_type,
-  weldPosition: record.weld_position
-}), "toExampleImageSummary");
+var toExampleImageSummary = /* @__PURE__ */ __name2((record) => {
+  let structuredAnalysis = null;
+  if (record.structured_analysis) {
+    try {
+      structuredAnalysis = JSON.parse(record.structured_analysis);
+    } catch (e) {
+    }
+  }
+  return {
+    id: record.id,
+    label: record.label,
+    title: record.title,
+    description: record.description,
+    originalName: record.original_name,
+    mimeType: record.mime_type,
+    sizeBytes: record.size_bytes,
+    createdAt: record.created_at,
+    materialType: record.material_type,
+    weldProcess: record.weld_process,
+    materialThickness: record.material_thickness,
+    jointType: record.joint_type,
+    weldPosition: record.weld_position,
+    structuredAnalysis
+  };
+}, "toExampleImageSummary");
 var onRequest2 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   const user = await getSessionUser(env, request);
   if (!user) {
@@ -468,7 +480,7 @@ var onRequest4 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   }
   const sessionUser = await withAdminFlag(env, baseUser);
   if (!sessionUser.isAdmin) {
-    return json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Forbidden" }, { status: 403 });
   }
   if (request.method === "GET") {
     try {
@@ -1383,6 +1395,15 @@ var handleUpload = /* @__PURE__ */ __name2(async (request, env) => {
   const materialThickness = String(form.get("materialThickness") || "").trim() || null;
   const jointType = String(form.get("jointType") || "").trim() || null;
   const weldPosition = String(form.get("weldPosition") || "").trim() || null;
+  const structuredAnalysisRaw = String(form.get("structuredAnalysis") || "").trim();
+  let structuredAnalysis = null;
+  if (structuredAnalysisRaw) {
+    try {
+      structuredAnalysis = JSON.parse(structuredAnalysisRaw);
+    } catch (e) {
+      console.warn("Failed to parse structuredAnalysis JSON", e);
+    }
+  }
   if (!(file instanceof File)) {
     return json9({ error: "File is required." }, { status: 400 });
   }
@@ -1424,7 +1445,8 @@ var handleUpload = /* @__PURE__ */ __name2(async (request, env) => {
       weldProcess,
       materialThickness,
       jointType,
-      weldPosition
+      weldPosition,
+      structuredAnalysis
     });
     if (aiDescription && env.AI) {
       try {

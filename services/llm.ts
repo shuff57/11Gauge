@@ -1,7 +1,8 @@
 // Service for handling LLM interactions and media processing
-import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider } from "../types";
+import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider, ExampleImageSummary } from "../types";
 import { resolveSystemPrompt, resolveVisionPrompt } from "../constants";
 import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
+import { getCachedExampleImageUrl } from "./exampleImages";
 
 export const VIDEO_UPLOAD_LIMITS = {
   maxDurationSeconds: 45,
@@ -22,6 +23,8 @@ interface AnalyzeMediaOptions {
   onPartialResponse?: (text: string) => void;
   onThinking?: (text: string) => void;
   onMetrics?: (metrics: import("../types").OllamaMetrics) => void;
+  onStructuredAnalysis?: (analysis: any) => void;
+  referenceImages?: ExampleImageSummary[];
 }
 
 const finalizeWithProgress = async (
@@ -51,7 +54,7 @@ export const analyzeMedia = async (
     case ModelProvider.OPENAI:
       return finalizeWithProgress(() => analyzeWithOpenAI(payload, settings), options?.onProgress);
     case ModelProvider.OLLAMA:
-      return finalizeWithProgress(() => analyzeWithOllama(payload, settings, options?.onPartialResponse, options?.onThinking, options?.onMetrics, options?.onProgress), options?.onProgress);
+      return finalizeWithProgress(() => analyzeWithOllama(payload, settings, options?.onPartialResponse, options?.onThinking, options?.onMetrics, options?.onProgress, options?.referenceImages, options?.onStructuredAnalysis), options?.onProgress);
     default:
       throw new Error("Invalid provider selected");
   }
@@ -114,7 +117,9 @@ const analyzeWithOllama = async (
   onPartial?: (text: string) => void,
   onThinking?: (text: string) => void,
   onMetrics?: (metrics: import("../types").OllamaMetrics) => void,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  referenceImages?: ExampleImageSummary[],
+  onStructuredAnalysis?: (analysis: any) => void
 ): Promise<string> => {
   const configuredUrl = settings.ollamaUrl || process.env.OLLAMA_URL || '';
   // We allow empty URL here so the backend can use its own OLLAMA_URL env var if available.
@@ -132,6 +137,57 @@ const analyzeWithOllama = async (
     throw new Error("No visual data was detected in the upload.");
   }
 
+  // --- REFERENCE IMAGE PREPARATION ---
+  let referenceContext = "";
+  if (referenceImages && referenceImages.length > 0) {
+    onProgress?.({ phase: 'preparing-media', message: 'Attaching reference examples...' });
+    
+    // Fetch and convert reference images to base64
+    const refPromises = referenceImages.map(async (ref, idx) => {
+      try {
+        const url = await getCachedExampleImageUrl(ref.id, ref.imageUrl);
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        return new Promise<string | null>((resolve) => {
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            resolve(base64.includes(',') ? base64.split(',')[1] : base64);
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn(`Failed to load reference image ${ref.id}`, e);
+        return null;
+      }
+    });
+
+    const refBase64s = await Promise.all(refPromises);
+    const validRefs = refBase64s.filter(Boolean) as string[];
+    
+    if (validRefs.length > 0) {
+      // Append reference images to the main images array
+      // The user's image(s) are first.
+      const userImageCount = images.length;
+      images.push(...validRefs);
+      
+      referenceContext = `\n\nREFERENCE IMAGES ATTACHED:
+I have attached ${validRefs.length} reference images for comparison.
+The first ${userImageCount} image(s) are the student's weld to be analyzed.
+The subsequent images are reference examples:`;
+
+      referenceImages.forEach((ref, i) => {
+        // Calculate the index in the combined array (1-based for human readability)
+        const refIndex = userImageCount + i + 1;
+        const type = ref.label === 'good' ? 'EXEMPLAR (Good)' : 'DEFECTIVE (Bad)';
+        referenceContext += `\n- Image ${refIndex}: ${type} - ${ref.title || 'Untitled'}. ${ref.description || ''}`;
+      });
+      
+      referenceContext += `\n\nINSTRUCTION: Compare the student's weld (Image 1) against these references. specifically citing if the student has achieved the qualities of the Exemplars or exhibits the flaws of the Defective examples.`;
+    }
+  }
+
   // --- PIPELINE LOGIC ---
   // If a reasoning model is configured, we use the 2-step pipeline.
   // The vision model is hardcoded to qwen3-vl as per requirements.
@@ -142,7 +198,10 @@ const analyzeWithOllama = async (
     // STEP 1: Vision Extraction
     onProgress?.({ phase: 'awaiting-model', message: 'Analyzing visual features (Step 1/2)...' });
     
-    const visionPrompt = resolveVisionPrompt(settings.visionPrompt);
+    let visionPrompt = resolveVisionPrompt(settings.visionPrompt);
+    if (referenceContext) {
+      visionPrompt += referenceContext;
+    }
 
     const visionResponse = await fetchOllamaGenerate({
       url: configuredUrl,
@@ -166,6 +225,10 @@ const analyzeWithOllama = async (
       const cleanJson = visualFindings.replace(/```json\n?|\n?```/g, '').trim();
       const data = JSON.parse(cleanJson);
       
+      if (onStructuredAnalysis) {
+        onStructuredAnalysis(data);
+      }
+
       let readable = "### 👁️ Vision Analysis Findings\n\n";
       
       if (data.detected_defects && Array.isArray(data.detected_defects) && data.detected_defects.length > 0) {
@@ -286,6 +349,10 @@ Based on the visual analysis above and the provided context, evaluate the weld a
   let promptPrefix = payload.kind === 'video'
     ? `${systemPrompt}\n\nThe user supplied a short video clip that has been converted into ${images.length} chronological frames. Analyze trends across the frames as a single scene.`
     : systemPrompt;
+
+  if (referenceContext) {
+    promptPrefix += referenceContext;
+  }
 
   // Append material context if available
   const materialContext = [];

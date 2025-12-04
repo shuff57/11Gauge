@@ -23,7 +23,7 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
   
   const sessionUser = await withAdminFlag(env, baseUser);
   if (!sessionUser.isAdmin) {
-    return json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (request.method === "GET") {

@@ -84,6 +84,16 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
   const materialThickness = String(form.get('materialThickness') || '').trim() || null;
   const jointType = String(form.get('jointType') || '').trim() || null;
   const weldPosition = String(form.get('weldPosition') || '').trim() || null;
+  
+  const structuredAnalysisRaw = String(form.get('structuredAnalysis') || '').trim();
+  let structuredAnalysis = null;
+  if (structuredAnalysisRaw) {
+    try {
+      structuredAnalysis = JSON.parse(structuredAnalysisRaw);
+    } catch (e) {
+      console.warn('Failed to parse structuredAnalysis JSON', e);
+    }
+  }
 
   if (!(file instanceof File)) {
     return json({ error: 'File is required.' }, { status: 400 });
@@ -133,7 +143,8 @@ const handleUpload = async (request: Request, env: ExampleEnv) => {
       weldProcess,
       materialThickness,
       jointType,
-      weldPosition
+      weldPosition,
+      structuredAnalysis
     });
 
     // Generate embedding for AI description if provided

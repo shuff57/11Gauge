@@ -52,13 +52,14 @@ import {
 import { MODEL_LABELS, DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, resolveSystemPrompt } from './constants';
 import { analyzeMedia, getOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 import { fetchPrimarySources, fetchPrimarySourceManifest, invalidatePrimarySourceCache } from './services/sources';
-import { fetchExampleImages, invalidateExampleImageCache } from './services/exampleImages';
+import { fetchExampleImages, invalidateExampleImageCache, selectReferenceImages } from './services/exampleImages';
 
 const SettingsModal = React.lazy(() => import('./components/SettingsModal').then((module) => ({ default: module.SettingsModal })));
 const SetupModal = React.lazy(() => import('./components/SetupModal').then((module) => ({ default: module.SetupModal })));
 const KeyManagerModal = React.lazy(() => import('./components/KeyManagerModal').then((module) => ({ default: module.KeyManagerModal })));
 const ResultPanel = React.lazy(() => import('./components/ResultPanel').then((module) => ({ default: module.ResultPanel })));
 const PrimarySourceModal = React.lazy(() => import('./components/PrimarySourceModal').then((module) => ({ default: module.PrimarySourceModal })));
+const SaveReferenceModal = React.lazy(() => import('./components/SaveReferenceModal').then((module) => ({ default: module.SaveReferenceModal })));
 
 export default function App() {
   const { debugLogs, addDebugLog } = useDebugPanel();
@@ -112,6 +113,7 @@ export default function App() {
   const [primarySourcesLoading, setPrimarySourcesLoading] = useState(false);
   const [primarySourcesError, setPrimarySourcesError] = useState<string | null>(null);
   const [isPrimarySourceModalOpen, setIsPrimarySourceModalOpen] = useState(false);
+  const [isSaveReferenceModalOpen, setIsSaveReferenceModalOpen] = useState(false);
   const [exampleImages, setExampleImages] = useState<ExampleImageSummary[]>([]);
   const [exampleImagesLoading, setExampleImagesLoading] = useState(false);
   const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -134,6 +136,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [reasoningTrace, setReasoningTrace] = useState<string | null>(null);
+  const [structuredAnalysis, setStructuredAnalysis] = useState<any>(null);
   const [ollamaMetrics, setOllamaMetrics] = useState<import('./types').OllamaMetrics | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
@@ -397,27 +400,40 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const needsHydration = !user || typeof user.isAdmin === 'undefined';
-    if (!needsHydration) return;
+    // Always verify session on mount to ensure cookie is valid
     let active = true;
     const fetchSessionUser = async () => {
       try {
         const response = await fetch('/api/auth/me');
         if (!active) return;
+        
         if (response.status === 401) {
-          if (!user || typeof user.isAdmin === 'undefined') {
-            setUser(null);
-          }
+          // Session is invalid, clear user state
+          if (user) setUser(null);
           return;
         }
+        
         if (!response.ok) return;
         const data = await response.json().catch(() => null);
         if (!active) return;
+        
         if (data?.user?.email) {
-          setUser({
-            email: data.user.email,
-            isAdmin: Boolean(data.user.isAdmin),
-            id: data.user.id
+          // Update user state if needed
+          setUser(prev => {
+            if (!prev) return {
+              email: data.user.email,
+              isAdmin: Boolean(data.user.isAdmin),
+              id: data.user.id
+            };
+            // Avoid redundant updates
+            if (prev.email !== data.user.email || prev.isAdmin !== Boolean(data.user.isAdmin)) {
+              return {
+                email: data.user.email,
+                isAdmin: Boolean(data.user.isAdmin),
+                id: data.user.id
+              };
+            }
+            return prev;
           });
         }
       } catch (err) {
@@ -428,7 +444,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, []);
 
   // When user changes, if we have user and provider is Ollama, fetch stored key
   useEffect(() => {
@@ -477,6 +493,7 @@ export default function App() {
     });
     setResult(null);
     setReasoningTrace(null);
+    setStructuredAnalysis(null);
     setOllamaMetrics(null);
     setError(undefined);
     setAnalysisProgress(null);
@@ -505,6 +522,7 @@ export default function App() {
     setPreviewUrl(null);
     setResult(null);
     setReasoningTrace(null);
+    setStructuredAnalysis(null);
     setOllamaMetrics(null);
     setError(undefined);
     setAnalysisProgress(null);
@@ -531,6 +549,7 @@ export default function App() {
     setIsAnalyzing(true);
     setError(undefined);
     setReasoningTrace(null);
+    setStructuredAnalysis(null);
     setOllamaMetrics(null);
     setProgressLog([]);
     setAnalysisProgress({ phase: 'preparing-media', message: 'Preparing upload...' });
@@ -562,8 +581,22 @@ export default function App() {
           throw new Error(err?.message || 'Failed to load primary sources.');
         }
       }
+
+      // Auto-select reference images if enabled
+      let selectedReferences: ExampleImageSummary[] = [];
+      if (effectiveSettings.autoIncludeReferences && exampleImages.length > 0) {
+        selectedReferences = selectReferenceImages(exampleImages, {
+          weldProcess: effectiveSettings.weldProcess,
+          weldPosition: effectiveSettings.weldPosition
+        });
+        if (selectedReferences.length > 0) {
+          addDebugLog(`Auto-selected ${selectedReferences.length} reference images`);
+          setProgressLog((log) => [...log, `Comparing against ${selectedReferences.length} reference examples...`]);
+        }
+      }
       
       const text = await analyzeMedia(selectedFile, effectiveSettings, {
+        referenceImages: selectedReferences,
         onProgress: (progress) => {
           setAnalysisProgress(progress);
           addDebugLog(`[progress] ${progress.phase}: ${progress.message || ''}`);
@@ -579,6 +612,9 @@ export default function App() {
         },
         onThinking: (trace) => {
           setReasoningTrace(trace);
+        },
+        onStructuredAnalysis: (analysis) => {
+          setStructuredAnalysis(analysis);
         },
         onMetrics: (metrics) => {
           setOllamaMetrics(metrics);
@@ -849,6 +885,23 @@ export default function App() {
             </Suspense>
           )}
 
+          {user && isAdminUser && selectedFile && (
+            <Suspense fallback={null}>
+              <SaveReferenceModal
+                isOpen={isSaveReferenceModalOpen}
+                onClose={() => setIsSaveReferenceModalOpen(false)}
+                file={selectedFile}
+                initialDescription={result || undefined}
+                settings={settings}
+                structuredAnalysis={structuredAnalysis}
+                onSuccess={() => {
+                  refreshExampleImages();
+                  // Optional: Show a success toast or message
+                }}
+              />
+            </Suspense>
+          )}
+
         </div>
       </header>
 
@@ -985,6 +1038,8 @@ export default function App() {
                     progress={analysisProgress}
                     thoughts={progressLog}
                     settings={settings}
+                    user={user}
+                    onSaveAsReference={() => setIsSaveReferenceModalOpen(true)}
                   />
                 </Suspense>
               )}

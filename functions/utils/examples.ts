@@ -20,6 +20,7 @@ export interface ExampleImageRecord {
   material_thickness?: string | null;
   joint_type?: string | null;
   weld_position?: string | null;
+  structured_analysis?: string | null;
 }
 
 const requireDb = (env: ExampleEnv): D1Database => {
@@ -46,7 +47,8 @@ const mapRow = (row?: any): ExampleImageRecord | null => {
     weld_process: row.weld_process ?? null,
     material_thickness: row.material_thickness ?? null,
     joint_type: row.joint_type ?? null,
-    weld_position: row.weld_position ?? null
+    weld_position: row.weld_position ?? null,
+    structured_analysis: row.structured_analysis ?? null
   };
 };
 
@@ -66,6 +68,7 @@ interface CreateExampleImageInput {
   materialThickness?: string | null;
   jointType?: string | null;
   weldPosition?: string | null;
+  structuredAnalysis?: string | null;
 }
 
 export const createExampleImageRecord = async (
@@ -79,8 +82,8 @@ export const createExampleImageRecord = async (
       original_name, mime_type, size_bytes,
       object_key, created_at,
       material_type, weld_process, material_thickness,
-      joint_type, weld_position
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      joint_type, weld_position, structured_analysis
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     input.id,
     input.userId,
@@ -96,7 +99,8 @@ export const createExampleImageRecord = async (
     input.weldProcess ?? null,
     input.materialThickness ?? null,
     input.jointType ?? null,
-    input.weldPosition ?? null
+    input.weldPosition ?? null,
+    input.structuredAnalysis ?? null
   ).run();
 
   const record = await getExampleImageRecord(env, input.id);
@@ -174,22 +178,34 @@ export interface ExampleImageSummaryPayload {
   materialThickness?: string | null;
   jointType?: string | null;
   weldPosition?: string | null;
+  structuredAnalysis?: any;
 }
 
 export const toExampleImageSummary = (
   record: ExampleImageRecord
-): ExampleImageSummaryPayload => ({
-  id: record.id,
-  label: record.label,
-  title: record.title,
-  description: record.description,
-  originalName: record.original_name,
-  mimeType: record.mime_type,
-  sizeBytes: record.size_bytes,
-  createdAt: record.created_at,
-  materialType: record.material_type,
-  weldProcess: record.weld_process,
-  materialThickness: record.material_thickness,
-  jointType: record.joint_type,
-  weldPosition: record.weld_position
-});
+): ExampleImageSummaryPayload => {
+  let structuredAnalysis = null;
+  if (record.structured_analysis) {
+    try {
+      structuredAnalysis = JSON.parse(record.structured_analysis);
+    } catch (e) {
+      // ignore parse error
+    }
+  }
+  return {
+    id: record.id,
+    label: record.label,
+    title: record.title,
+    description: record.description,
+    originalName: record.original_name,
+    mimeType: record.mime_type,
+    sizeBytes: record.size_bytes,
+    createdAt: record.created_at,
+    materialType: record.material_type,
+    weldProcess: record.weld_process,
+    materialThickness: record.material_thickness,
+    jointType: record.joint_type,
+    weldPosition: record.weld_position,
+    structuredAnalysis
+  };
+};

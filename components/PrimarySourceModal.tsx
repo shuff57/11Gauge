@@ -9,7 +9,8 @@ import {
   ShieldAlert,
   Trash2,
   UploadCloud,
-  X
+  X,
+  FileJson
 } from 'lucide-react';
 import type { ExampleImageLabel, ExampleImageSummary, PrimarySourceSummary } from '../types';
 import { deletePrimarySource, processAndUploadPrimarySource, type SourceUploadPhase } from '../services/sources';
@@ -56,8 +57,9 @@ const ReferenceImageCard: React.FC<{
   image: ExampleImageSummary;
   isAdmin: boolean;
   onDelete: (id: string) => void;
+  onViewRubric: (image: ExampleImageSummary) => void;
   deleting: boolean;
-}> = ({ image, isAdmin, onDelete, deleting }) => {
+}> = ({ image, isAdmin, onDelete, onViewRubric, deleting }) => {
   const [resolvedSrc, setResolvedSrc] = React.useState(image.imageUrl);
 
   React.useEffect(() => {
@@ -99,11 +101,21 @@ const ReferenceImageCard: React.FC<{
           {formatBytes(image.sizeBytes)} · {new Date(image.createdAt).toLocaleDateString()}
         </p>
       </div>
+      {image.structuredAnalysis && (
+        <button
+          type="button"
+          onClick={() => onViewRubric(image)}
+          className="absolute top-3 right-20 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-sky-300 hover:bg-sky-900/20 bg-black/50 backdrop-blur-sm border border-sky-500/30"
+        >
+          <FileJson className="w-3 h-3" />
+          Rubric
+        </button>
+      )}
       {isAdmin && (
         <button
           type="button"
           onClick={() => onDelete(image.id)}
-          className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-red-300 hover:bg-red-900/20"
+          className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-red-300 hover:bg-red-900/20 bg-black/50 backdrop-blur-sm border border-red-500/30"
           disabled={deleting}
         >
           {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
@@ -159,6 +171,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
   const [imageDeletingId, setImageDeletingId] = React.useState<string | null>(null);
   const [imageRefreshing, setImageRefreshing] = React.useState(false);
   const [selectedMediaFile, setSelectedMediaFile] = React.useState<File | null>(null);
+  const [viewingRubric, setViewingRubric] = React.useState<ExampleImageSummary | null>(null);
 
   const filteredImages = React.useMemo(() => {
     if (imageFilter === 'all') return referenceImages;
@@ -667,6 +680,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                           image={image}
                           isAdmin={isAdmin}
                           onDelete={handleImageDelete}
+                          onViewRubric={setViewingRubric}
                           deleting={imageDeletingId === image.id}
                         />
                       ))}
@@ -687,6 +701,28 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
           </footer>
         </div>
       </div>
+      
+      {viewingRubric && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4" onClick={() => setViewingRubric(null)}>
+            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-auto flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white">Grading Rubric</h3>
+                    <button onClick={() => setViewingRubric(null)} className="text-zinc-400 hover:text-white">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-auto custom-scrollbar bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                    <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap">
+                        {JSON.stringify(viewingRubric.structuredAnalysis, null, 2)}
+                    </pre>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button onClick={() => setViewingRubric(null)} className="px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-zinc-200">Close</button>
+                </div>
+            </div>
+        </div>
+      )}
+
       <input ref={pdfInputRef} type="file" className="hidden" accept="application/pdf" onChange={handlePdfChange} disabled={!isAdmin} />
       <input ref={imageInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleImageChange} disabled={!isAdmin} />
     </>

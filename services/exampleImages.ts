@@ -62,6 +62,7 @@ export interface ExampleImageUploadInput {
   jointType?: string;
   weldPosition?: string;
   aiDescription?: string;
+  structuredAnalysis?: any;
 }
 
 export const uploadExampleImage = async (
@@ -86,6 +87,7 @@ export const uploadExampleImage = async (
   if (input.jointType) formData.append('jointType', input.jointType);
   if (input.weldPosition) formData.append('weldPosition', input.weldPosition);
   if (input.aiDescription) formData.append('aiDescription', input.aiDescription);
+  if (input.structuredAnalysis) formData.append('structuredAnalysis', JSON.stringify(input.structuredAnalysis));
 
   const response = await fetch('/api/examples', {
     method: 'POST',
@@ -112,4 +114,34 @@ export const deleteExampleImage = async (id: string): Promise<void> => {
     throw new Error(payload?.error || 'Failed to delete example image.');
   }
   invalidateExampleImageCache(id);
+};
+
+export const selectReferenceImages = (
+  allImages: ExampleImageSummary[],
+  criteria: { weldProcess?: string; weldPosition?: string }
+): ExampleImageSummary[] => {
+  // Filter by criteria if provided
+  let candidates = allImages;
+  
+  if (criteria.weldProcess) {
+    const p = criteria.weldProcess.toLowerCase();
+    candidates = candidates.filter(img => !img.weldProcess || img.weldProcess.toLowerCase() === p);
+  }
+  
+  if (criteria.weldPosition) {
+    const pos = criteria.weldPosition.toLowerCase();
+    candidates = candidates.filter(img => !img.weldPosition || img.weldPosition.toLowerCase() === pos);
+  }
+
+  const good = candidates.filter(img => img.label === 'good');
+  const bad = candidates.filter(img => img.label === 'bad');
+
+  const shuffle = (array: ExampleImageSummary[]) => {
+    return array.sort(() => 0.5 - Math.random());
+  };
+
+  const selectedGood = shuffle(good).slice(0, 2);
+  const selectedBad = shuffle(bad).slice(0, 2);
+
+  return [...selectedGood, ...selectedBad];
 };

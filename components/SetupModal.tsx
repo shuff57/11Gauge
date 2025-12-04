@@ -142,6 +142,21 @@ export const SetupModal: React.FC<SetupModalProps> = ({
                       ))}
                     </select>
                   </div>
+
+                  <div className="pt-2 border-t border-zinc-800/50">
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-zinc-800 bg-zinc-950/50 cursor-pointer hover:bg-zinc-900 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={settings.autoIncludeReferences ?? false}
+                        onChange={(e) => handleChange('autoIncludeReferences', e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500/20"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-white">Auto-include Reference Examples</p>
+                        <p className="text-xs text-zinc-500">Automatically attach 2 good and 2 bad examples matching your process/position.</p>
+                      </div>
+                    </label>
+                  </div>
              </div>
           </div>
 

@@ -26,6 +26,7 @@ export interface AppSettings {
   jointType?: string;
   weldPosition?: string;
   rodType?: string;
+  autoIncludeReferences?: boolean;
 }
 
 export interface SessionUser {
@@ -82,6 +83,7 @@ export interface ExampleImageSummary {
   materialThickness?: string;
   jointType?: string;
   weldPosition?: string;
+  structuredAnalysis?: any;
 }
 
 export interface ExampleImageUploadInput {
@@ -93,6 +95,8 @@ export interface ExampleImageUploadInput {
   materialThickness?: string;
   jointType?: string;
   weldPosition?: string;
+  aiDescription?: string;
+  structuredAnalysis?: any;
 }
 
 export type MediaKind = 'image' | 'video';

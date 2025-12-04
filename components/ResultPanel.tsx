@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Loader2, AlertCircle, BrainCircuit, Activity, Layout } from 'lucide-react';
-import { AnalysisProgress, OllamaMetrics, AppSettings } from '../types';
+import { Loader2, AlertCircle, BrainCircuit, Activity, Layout, Save } from 'lucide-react';
+import { AnalysisProgress, OllamaMetrics, AppSettings, SessionUser } from '../types';
 
 interface ResultPanelProps {
   loading: boolean;
@@ -13,9 +13,22 @@ interface ResultPanelProps {
   progress?: AnalysisProgress | null;
   thoughts?: string[];
   settings?: AppSettings;
+  user?: SessionUser | null;
+  onSaveAsReference?: () => void;
 }
 
-export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reasoningTrace, metrics, error, progress, thoughts, settings }) => {
+export const ResultPanel: React.FC<ResultPanelProps> = ({ 
+  loading, 
+  result, 
+  reasoningTrace, 
+  metrics, 
+  error, 
+  progress, 
+  thoughts, 
+  settings,
+  user,
+  onSaveAsReference
+}) => {
   if (loading && !result) {
     const detail = (() => {
       if (!progress) return 'Analyzing visual data...';
@@ -165,6 +178,18 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ loading, result, reaso
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {user?.isAdmin && onSaveAsReference && (
+        <div className="mt-8 pt-6 border-t border-zinc-800/50 flex justify-end">
+          <button
+            onClick={onSaveAsReference}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors"
+          >
+            <Save className="w-4 h-4" />
+            Save as Reference Media
+          </button>
         </div>
       )}
     </div>

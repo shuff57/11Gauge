@@ -188,7 +188,8 @@ var mapRow = /* @__PURE__ */ __name((row) => {
     weld_process: row.weld_process ?? null,
     material_thickness: row.material_thickness ?? null,
     joint_type: row.joint_type ?? null,
-    weld_position: row.weld_position ?? null
+    weld_position: row.weld_position ?? null,
+    structured_analysis: row.structured_analysis ?? null
   };
 }, "mapRow");
 var createExampleImageRecord = /* @__PURE__ */ __name(async (env, input) => {
@@ -199,8 +200,8 @@ var createExampleImageRecord = /* @__PURE__ */ __name(async (env, input) => {
       original_name, mime_type, size_bytes,
       object_key, created_at,
       material_type, weld_process, material_thickness,
-      joint_type, weld_position
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      joint_type, weld_position, structured_analysis
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     input.id,
     input.userId,
@@ -216,7 +217,8 @@ var createExampleImageRecord = /* @__PURE__ */ __name(async (env, input) => {
     input.weldProcess ?? null,
     input.materialThickness ?? null,
     input.jointType ?? null,
-    input.weldPosition ?? null
+    input.weldPosition ?? null,
+    input.structuredAnalysis ?? null
   ).run();
   const record = await getExampleImageRecord(env, input.id);
   if (!record) {
@@ -254,21 +256,31 @@ var createExampleImageChunk = /* @__PURE__ */ __name(async (env, imageId, textCo
      VALUES (?, ?, ?, ?, ?)`
   ).bind(id, imageId, textContent, embeddingJson, createdAt).run();
 }, "createExampleImageChunk");
-var toExampleImageSummary = /* @__PURE__ */ __name((record) => ({
-  id: record.id,
-  label: record.label,
-  title: record.title,
-  description: record.description,
-  originalName: record.original_name,
-  mimeType: record.mime_type,
-  sizeBytes: record.size_bytes,
-  createdAt: record.created_at,
-  materialType: record.material_type,
-  weldProcess: record.weld_process,
-  materialThickness: record.material_thickness,
-  jointType: record.joint_type,
-  weldPosition: record.weld_position
-}), "toExampleImageSummary");
+var toExampleImageSummary = /* @__PURE__ */ __name((record) => {
+  let structuredAnalysis = null;
+  if (record.structured_analysis) {
+    try {
+      structuredAnalysis = JSON.parse(record.structured_analysis);
+    } catch (e) {
+    }
+  }
+  return {
+    id: record.id,
+    label: record.label,
+    title: record.title,
+    description: record.description,
+    originalName: record.original_name,
+    mimeType: record.mime_type,
+    sizeBytes: record.size_bytes,
+    createdAt: record.created_at,
+    materialType: record.material_type,
+    weldProcess: record.weld_process,
+    materialThickness: record.material_thickness,
+    jointType: record.joint_type,
+    weldPosition: record.weld_position,
+    structuredAnalysis
+  };
+}, "toExampleImageSummary");
 
 // api/examples/[id]/image.ts
 var onRequest2 = /* @__PURE__ */ __name(async ({ request, env }) => {
@@ -480,7 +492,7 @@ var onRequest4 = /* @__PURE__ */ __name(async ({ request, env }) => {
   }
   const sessionUser = await withAdminFlag(env, baseUser);
   if (!sessionUser.isAdmin) {
-    return json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Forbidden" }, { status: 403 });
   }
   if (request.method === "GET") {
     try {
@@ -1423,6 +1435,15 @@ var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
   const materialThickness = String(form.get("materialThickness") || "").trim() || null;
   const jointType = String(form.get("jointType") || "").trim() || null;
   const weldPosition = String(form.get("weldPosition") || "").trim() || null;
+  const structuredAnalysisRaw = String(form.get("structuredAnalysis") || "").trim();
+  let structuredAnalysis = null;
+  if (structuredAnalysisRaw) {
+    try {
+      structuredAnalysis = JSON.parse(structuredAnalysisRaw);
+    } catch (e) {
+      console.warn("Failed to parse structuredAnalysis JSON", e);
+    }
+  }
   if (!(file instanceof File)) {
     return json9({ error: "File is required." }, { status: 400 });
   }
@@ -1464,7 +1485,8 @@ var handleUpload = /* @__PURE__ */ __name(async (request, env) => {
       weldProcess,
       materialThickness,
       jointType,
-      weldPosition
+      weldPosition,
+      structuredAnalysis
     });
     if (aiDescription && env.AI) {
       try {
@@ -2441,7 +2463,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-H46Ffr/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-yy77MD/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2473,7 +2495,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-H46Ffr/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-yy77MD/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
