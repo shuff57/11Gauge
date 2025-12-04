@@ -36,7 +36,7 @@ const mergePrimarySourcesIntoPrompt = (
     Math.floor(PRIMARY_SOURCE_CONTEXT_BUDGET / manifests.length)
   );
   const contextBlocks = manifests.map((manifest) => formatPrimarySourceContext(manifest, perSourceBudget)).join('\n\n');
-  return `${base}\n\n***PRIMARY SOURCE EVIDENCE (cite titles + pages):***\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page inline immediately after the fact. Do NOT include a "Sources" or "References" section at the end of the response.`;
+  return `${base}\n\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page inline immediately after the fact. Do NOT include a "Sources" or "References" section at the end of the response.`;
 };
 import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Images } from 'lucide-react';
 import { AuthModal } from './components/AuthModal';
