@@ -1,7 +1,8 @@
 import { getSessionUser } from "../../utils/session";
-import { DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from "../../constants";
+import { withAdminFlag, AdminEnv } from "../../utils/admin";
+import { DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from "../../../../constants";
 
-interface Env {
+interface Env extends AdminEnv {
   USERS_DB: D1Database;
 }
 
@@ -15,8 +16,13 @@ const json = (body: any, init: ResponseInit = {}) =>
   });
 
 export const onRequest = async ({ request, env }: { request: Request; env: Env }) => {
-  const sessionUser = await getSessionUser(env, request);
-  if (!sessionUser || !sessionUser.isAdmin) {
+  const baseUser = await getSessionUser(env, request);
+  if (!baseUser) {
+    return json({ error: "Unauthorized" }, { status: 401 });
+  }
+  
+  const sessionUser = await withAdminFlag(env, baseUser);
+  if (!sessionUser.isAdmin) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 

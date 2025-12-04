@@ -428,6 +428,32 @@ var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
     });
   }
 }, "onRequest");
+var parseAdminEmails = /* @__PURE__ */ __name2((raw) => {
+  if (!raw) return [];
+  return raw.split(/[,\n;]/).map((value) => value.trim().toLowerCase()).filter(Boolean);
+}, "parseAdminEmails");
+var isAdminEmail = /* @__PURE__ */ __name2(async (env, email) => {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return false;
+  const envAdmins = parseAdminEmails(env.ADMIN_EMAILS);
+  if (envAdmins.includes(normalized)) return true;
+  if (env.USERS_DB) {
+    try {
+      const result = await env.USERS_DB.prepare("SELECT 1 FROM admin_allowlist WHERE email = ?").bind(normalized).first();
+      if (result) return true;
+    } catch (e) {
+      console.warn("Failed to check admin DB", e);
+    }
+  }
+  return false;
+}, "isAdminEmail");
+var withAdminFlag = /* @__PURE__ */ __name2(async (env, user) => {
+  return {
+    ...user,
+    isAdmin: await isAdminEmail(env, user.email)
+  };
+}, "withAdminFlag");
 var json = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {
@@ -436,8 +462,12 @@ var json = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.string
   }
 }), "json");
 var onRequest4 = /* @__PURE__ */ __name2(async ({ request, env }) => {
-  const sessionUser = await getSessionUser(env, request);
-  if (!sessionUser || !sessionUser.isAdmin) {
+  const baseUser = await getSessionUser(env, request);
+  if (!baseUser) {
+    return json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const sessionUser = await withAdminFlag(env, baseUser);
+  if (!sessionUser.isAdmin) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
   if (request.method === "GET") {
@@ -490,32 +520,6 @@ var onRequest4 = /* @__PURE__ */ __name2(async ({ request, env }) => {
   }
   return new Response("Method Not Allowed", { status: 405 });
 }, "onRequest");
-var parseAdminEmails = /* @__PURE__ */ __name2((raw) => {
-  if (!raw) return [];
-  return raw.split(/[,\n;]/).map((value) => value.trim().toLowerCase()).filter(Boolean);
-}, "parseAdminEmails");
-var isAdminEmail = /* @__PURE__ */ __name2(async (env, email) => {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  if (!normalized) return false;
-  const envAdmins = parseAdminEmails(env.ADMIN_EMAILS);
-  if (envAdmins.includes(normalized)) return true;
-  if (env.USERS_DB) {
-    try {
-      const result = await env.USERS_DB.prepare("SELECT 1 FROM admin_allowlist WHERE email = ?").bind(normalized).first();
-      if (result) return true;
-    } catch (e) {
-      console.warn("Failed to check admin DB", e);
-    }
-  }
-  return false;
-}, "isAdminEmail");
-var withAdminFlag = /* @__PURE__ */ __name2(async (env, user) => {
-  return {
-    ...user,
-    isAdmin: await isAdminEmail(env, user.email)
-  };
-}, "withAdminFlag");
 var json2 = /* @__PURE__ */ __name2((body, init = {}) => new Response(JSON.stringify(body), {
   ...init,
   headers: {

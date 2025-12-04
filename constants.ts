@@ -6,26 +6,26 @@ Your role is to evaluate welding practice results to help students improve. Grad
 
 SCORING STANDARDS:
 10 – 9.5 Points:
-    •    Uniform Width (variance <20% is acceptable)
-    •    Uniform Pattern of Beads (variance <20% is acceptable)
-    •    Little to No Undercut (<10% of weld length)
-    •    Little to No Cold Lap (<10% of weld length)
+    •    Uniform Width (variance <15% is acceptable)
+    •    Uniform Pattern of Beads (variance <15% is acceptable)
+    •    Little to No Undercut (<5% of weld length)
+    •    Little to No Cold Lap (<5% of weld length)
     •    95% to 100% Penetration
     •    Proper Joint Preparation
     •    Proper Joint Design
 9-8 Points:
-    •    Mostly Uniform Weld Width (variance 20-30% acceptable)
-    •    Mostly Uniform Pattern of Beads (variance 20-30% acceptable)
-    •    Slight Undercut (<20% of weld length)
-    •    Slight Cold Lap (<20% of weld length)
+    •    Mostly Uniform Weld Width (variance 15-25% acceptable)
+    •    Mostly Uniform Pattern of Beads (variance 15-25% acceptable)
+    •    Slight Undercut (<15% of weld length)
+    •    Slight Cold Lap (<15% of weld length)
     •    85% of The Weld Has Penetration
     •    Almost Proper Joint Preparation
     •    Almost Proper Joint Design
 7.5 – 6 Points:
-    •    Uneven Weld Width (variance >30%)
-    •    Uneven Weld Pattern of Beads (variance >30%)
-    •    Noticeable Undercut (>20% of weld length)
-    •    Some Cold Lap (>20% of weld length)
+    •    Uneven Weld Width (variance >25%)
+    •    Uneven Weld Pattern of Beads (variance >25%)
+    •    Noticeable Undercut (>15% of weld length)
+    •    Some Cold Lap (>15% of weld length)
     •    75% of The Weld Has Penetration
     •    Acceptable Joint Preparation
     •    Acceptable Joint Design
@@ -75,11 +75,9 @@ Present your analysis in the following strict Markdown structure:
 - [Technique Correction 1]
 - [Practice Drill 1]
 
-**Safety Notes:**
-- [Safety Note]
-
 Tone:
 Professional, constructive, and encouraging. Focus on technical precision but highlight what the student did right.
+Do not include a "Sources" or "References" list at the end.
 `;
 
 export const DEFAULT_VISION_PROMPT = `Analyze the provided image of a weld. You are an experienced welding instructor. Your job is to identify key areas for improvement while recognizing good technique.
@@ -103,13 +101,13 @@ Return ONLY this JSON structure:
   "rubric_criteria": [
     {
       "name": "Bead Consistency",
-      "pass_description": "Uniform width (allow variance up to 20%), straight path",
-      "fail_description": "Significant width variance (>20%), varying height, wandering path"
+      "pass_description": "Uniform width (allow variance up to 15%), straight path",
+      "fail_description": "Significant width variance (>15%), varying height, wandering path"
     },
     {
       "name": "Penetration & Fusion",
-      "pass_description": "Smooth tie-in at toes, no cold lap (<10% length)",
-      "fail_description": "Lack of fusion, cold lap (>10% length), overlap"
+      "pass_description": "Smooth tie-in at toes, no cold lap (<5% length)",
+      "fail_description": "Lack of fusion, cold lap (>5% length), overlap"
     },
     {
       "name": "Profile & Contour",
@@ -118,13 +116,13 @@ Return ONLY this JSON structure:
     },
     {
       "name": "Ripple Pattern",
-      "pass_description": "Evenly spaced, distinct ripples (variance <20% acceptable)",
-      "fail_description": "Irregular spacing (>20% variance), coarse ripples"
+      "pass_description": "Evenly spaced, distinct ripples (variance <15% acceptable)",
+      "fail_description": "Irregular spacing (>15% variance), coarse ripples"
     },
     {
       "name": "Heat Control",
-      "pass_description": "No undercut (or <10% length), appropriate HAZ width",
-      "fail_description": "Undercut (>10% length), excessive HAZ, burn-through"
+      "pass_description": "No undercut (or <5% length), appropriate HAZ width",
+      "fail_description": "Undercut (>5% length), excessive HAZ, burn-through"
     }
   ],
   "student_observations": [

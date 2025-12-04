@@ -277,7 +277,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
       });
       
       if (!response.ok) {
-        throw new Error('Failed to save prompts');
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to save prompts');
       }
       
       setPromptsMessage({ type: 'success', text: 'Global prompts updated successfully.' });
