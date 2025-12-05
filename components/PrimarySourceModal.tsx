@@ -9,8 +9,7 @@ import {
   ShieldAlert,
   Trash2,
   UploadCloud,
-  X,
-  FileJson
+  X
 } from 'lucide-react';
 import type { ExampleImageLabel, ExampleImageSummary, PrimarySourceSummary } from '../types';
 import { deletePrimarySource, processAndUploadPrimarySource, type SourceUploadPhase } from '../services/sources';
@@ -58,10 +57,15 @@ const ReferenceImageCard: React.FC<{
   image: ExampleImageSummary;
   isAdmin: boolean;
   onDelete: (id: string) => void;
-  onViewRubric: (image: ExampleImageSummary) => void;
+  onPreview: (image: ExampleImageSummary) => void;
   deleting: boolean;
-}> = ({ image, isAdmin, onDelete, onViewRubric, deleting }) => {
+}> = ({ image, isAdmin, onDelete, onPreview, deleting }) => {
   const [resolvedSrc, setResolvedSrc] = React.useState(image.imageUrl);
+  const isIdeal = image.label === 'good';
+  const badgeTone = isIdeal
+    ? 'border-emerald-500/40 text-emerald-200 bg-emerald-900/40'
+    : 'border-amber-500/40 text-amber-200 bg-amber-900/40';
+  const accentBorderColor = isIdeal ? 'border-emerald-500/40' : 'border-amber-400/70';
 
   React.useEffect(() => {
     let active = true;
@@ -77,52 +81,55 @@ const ReferenceImageCard: React.FC<{
     };
   }, [image.id, image.imageUrl]);
 
+  const handlePreview = () => onPreview(image);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handlePreview();
+    }
+  };
+
   return (
-    <article className="relative border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-950">
-      <div className="aspect-video bg-zinc-900">
+    <article
+      className={`relative group rounded-2xl bg-zinc-950 cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-600 flex flex-col border-2 ${accentBorderColor}`}
+      role="button"
+      tabIndex={0}
+      onClick={handlePreview}
+      onKeyDown={handleKeyDown}
+    >
+      <div className={`p-3 pb-0 bg-black/60 border-b w-full ${accentBorderColor} rounded-t-[0.9rem]`}>
+        <p className="text-sm font-semibold text-white line-clamp-2 pr-2 drop-shadow">{image.title}</p>
+      </div>
+      <div className="relative aspect-video bg-zinc-900">
         {image.mimeType.startsWith('video/') ? (
-          <video src={resolvedSrc} className="w-full h-full object-cover" controls playsInline />
+          <video
+            src={resolvedSrc}
+            className="w-full h-full object-cover pointer-events-none"
+            playsInline
+            muted
+            loop
+            preload="metadata"
+          />
         ) : (
-          <img src={resolvedSrc} alt={image.title} className="w-full h-full object-cover" loading="lazy" />
+          <img src={resolvedSrc} alt={image.title} className="w-full h-full object-cover pointer-events-none" loading="lazy" />
         )}
       </div>
-      <div className="p-4 space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-white">{image.title}</p>
-          <span
-            className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border ${
-              image.label === 'good' ? 'border-emerald-500/40 text-emerald-200' : 'border-amber-500/40 text-amber-200'
-            }`}
-          >
-            {image.label === 'good' ? 'Ideal' : 'Needs Work'}
-          </span>
-        </div>
-        {image.description && <p className="text-xs text-zinc-400 line-clamp-2">{image.description}</p>}
-        <p className="text-[10px] text-zinc-500 font-mono">
-          {formatBytes(image.sizeBytes)} · {new Date(image.createdAt).toLocaleDateString()}
-        </p>
-      </div>
-      {image.structuredAnalysis && (
+      <div className={`px-3 py-2 bg-black/70 border-t flex items-center justify-between text-[11px] text-white ${accentBorderColor} rounded-b-[0.9rem]`}>
+        <span>View details</span>
         <button
           type="button"
-          onClick={() => onViewRubric(image)}
-          className="absolute top-3 right-20 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-sky-300 hover:bg-sky-900/20 bg-black/50 backdrop-blur-sm border border-sky-500/30"
-        >
-          <FileJson className="w-3 h-3" />
-          Rubric
-        </button>
-      )}
-      {isAdmin && (
-        <button
-          type="button"
-          onClick={() => onDelete(image.id)}
-          className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-red-300 hover:bg-red-900/20 bg-black/50 backdrop-blur-sm border border-red-500/30"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-red-300 hover:bg-red-900/20 border border-red-500/30"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(image.id);
+          }}
           disabled={deleting}
         >
           {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
           Remove
         </button>
-      )}
+      </div>
     </article>
   );
 };
@@ -174,12 +181,33 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
   const [imageDeletingId, setImageDeletingId] = React.useState<string | null>(null);
   const [imageRefreshing, setImageRefreshing] = React.useState(false);
   const [selectedMediaFile, setSelectedMediaFile] = React.useState<File | null>(null);
-  const [viewingRubric, setViewingRubric] = React.useState<ExampleImageSummary | null>(null);
+  const [previewingImage, setPreviewingImage] = React.useState<ExampleImageSummary | null>(null);
+  const [previewSrc, setPreviewSrc] = React.useState<string | null>(null);
 
   const filteredImages = React.useMemo(() => {
     if (imageFilter === 'all') return referenceImages;
     return referenceImages.filter((img) => img.label === imageFilter);
   }, [referenceImages, imageFilter]);
+
+  React.useEffect(() => {
+    if (!previewingImage) {
+      setPreviewSrc(null);
+      return;
+    }
+
+    let active = true;
+    getCachedExampleImageUrl(previewingImage.id, previewingImage.imageUrl)
+      .then((url) => {
+        if (active) setPreviewSrc(url);
+      })
+      .catch(() => {
+        if (active) setPreviewSrc(previewingImage.imageUrl);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [previewingImage]);
 
   const triggerPdfUpload = () => {
     if (!isAdmin) return;
@@ -333,6 +361,14 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
     } finally {
       setImageDeletingId(null);
     }
+  };
+
+  const handleOpenPreview = React.useCallback((image: ExampleImageSummary) => {
+    setPreviewingImage(image);
+  }, []);
+
+  const handleClosePreview = () => {
+    setPreviewingImage(null);
   };
 
   const handleContainerClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -681,23 +717,35 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                   type="button"
                   onClick={() => setImageFilter('all')}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                    imageFilter === 'all' ? 'border-white text-white' : 'border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-white'
+                    imageFilter === 'all'
+                      ? 'border-white text-white bg-white/5'
+                      : 'border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-white'
                   }`}
                 >
                   All ({referenceImages.length})
                 </button>
-                {LABEL_OPTIONS.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setImageFilter(item.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                      imageFilter === item.value ? `${item.tone}` : 'border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-white'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                {LABEL_OPTIONS.map((item) => {
+                  const isActive = imageFilter === item.value;
+                  const activeClasses =
+                    item.value === 'good'
+                      ? 'border-emerald-400 text-emerald-100 bg-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
+                      : 'border-amber-400 text-amber-100 bg-amber-500/10 shadow-[0_0_10px_rgba(251,191,36,0.35)]';
+                  const inactiveClasses =
+                    item.value === 'good'
+                      ? 'border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/5'
+                      : 'border-amber-400/70 text-amber-200 hover:bg-amber-500/5';
+
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setImageFilter(item.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${isActive ? activeClasses : inactiveClasses}`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {imageDeleteError && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2">{imageDeleteError}</div>}
@@ -720,7 +768,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                       image={image}
                       isAdmin={isAdmin}
                       onDelete={handleImageDelete}
-                      onViewRubric={setViewingRubric}
+                      onPreview={handleOpenPreview}
                       deleting={imageDeletingId === image.id}
                     />
                   ))}
@@ -742,23 +790,141 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
     </div>
   );
 
-  const rubricModal =
-    viewingRubric && (
-      <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4" onClick={() => setViewingRubric(null)}>
-        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-white">Grading Rubric</h3>
-            <button onClick={() => setViewingRubric(null)} className="text-zinc-400 hover:text-white">
-              <X className="w-5 h-5" />
+  const previewModal =
+    previewingImage && (
+      <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={handleClosePreview}>
+        <div
+          className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+            <div>
+              <p className="text-sm font-semibold text-white">{previewingImage.title || 'Reference Media'}</p>
+              <p className="text-xs text-zinc-500">
+                {previewingImage.label === 'good' ? 'Ideal reference example' : 'Needs work reference example'}
+              </p>
+            </div>
+            <button onClick={handleClosePreview} className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800">
+              <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-auto custom-scrollbar bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-            <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap">{JSON.stringify(viewingRubric.structuredAnalysis, null, 2)}</pre>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button onClick={() => setViewingRubric(null)} className="px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-zinc-200">
-              Close
-            </button>
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <div className="rounded-2xl border border-zinc-800 bg-black/30 p-2 flex items-center justify-center">
+                {previewingImage.mimeType.startsWith('video/') ? (
+                  <video
+                    src={previewSrc || previewingImage.imageUrl}
+                    controls
+                    playsInline
+                    className="w-full max-h-[480px] rounded-xl"
+                  />
+                ) : (
+                  <img
+                    src={previewSrc || previewingImage.imageUrl}
+                    alt={previewingImage.title}
+                    className="w-full max-h-[480px] object-contain rounded-xl"
+                  />
+                )}
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
+                <p className="text-xs uppercase tracking-widest text-zinc-500">Material Settings</p>
+                <dl className="text-xs text-zinc-400 space-y-2">
+                  <div className="flex justify-between gap-6">
+                    <dt>Material</dt>
+                    <dd className="text-white">{previewingImage.materialType || 'Not specified'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <dt>Process</dt>
+                    <dd className="text-white">{previewingImage.weldProcess || 'Not specified'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <dt>Thickness</dt>
+                    <dd className="text-white">{previewingImage.materialThickness || 'Not specified'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <dt>Joint</dt>
+                    <dd className="text-white">{previewingImage.jointType || 'Not specified'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <dt>Position</dt>
+                    <dd className="text-white">{previewingImage.weldPosition || 'Not specified'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <dt>File</dt>
+                    <dd className="text-white">{formatBytes(previewingImage.sizeBytes)} · {previewingImage.mimeType.toUpperCase()}</dd>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <dt>Uploaded</dt>
+                    <dd className="text-white">{new Date(previewingImage.createdAt).toLocaleString()}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Grading & Analysis</p>
+                  <p className="text-xs text-zinc-500">Model-observed rubric output.</p>
+                </div>
+              </div>
+
+              {previewingImage.structuredAnalysis ? (
+                <div className="space-y-4">
+                  {(previewingImage.structuredAnalysis.overall_grade || previewingImage.structuredAnalysis.feedback) && (
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                      {previewingImage.structuredAnalysis.overall_grade && (
+                        <p className="text-xs uppercase tracking-widest text-emerald-300">
+                          Grade · {previewingImage.structuredAnalysis.overall_grade}
+                        </p>
+                      )}
+                      {previewingImage.structuredAnalysis.feedback && (
+                        <p className="text-sm text-emerald-50 mt-1">{previewingImage.structuredAnalysis.feedback}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {previewingImage.structuredAnalysis.student_observations?.length ? (
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-widest text-zinc-500">Observations</p>
+                      {previewingImage.structuredAnalysis.student_observations.map((obs, index) => (
+                        <div key={`${obs.criterion}-${index}`} className="rounded-xl border border-zinc-800 p-3 bg-zinc-900/40">
+                          <p className="text-sm font-semibold text-white">{obs.criterion}</p>
+                          <p className="text-xs text-zinc-400 mt-1">{obs.observed_condition}</p>
+                          <p className="text-[11px] text-zinc-500 mt-1">
+                            Match: <span className="text-white">{obs.matches_reference}</span>
+                            {obs.score && <span className="ml-2">Score: {obs.score}</span>}
+                          </p>
+                          {obs.variance_estimate && (
+                            <p className="text-[11px] text-zinc-500">Variance: {obs.variance_estimate}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500">No detailed observations captured.</p>
+                  )}
+
+                  {previewingImage.structuredAnalysis.detected_defects?.length ? (
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-widest text-zinc-500">Detected Defects</p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {previewingImage.structuredAnalysis.detected_defects.map((defect, index) => (
+                          <div key={`${defect.type}-${index}`} className="rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+                            <p className="text-sm font-semibold text-red-200">{defect.type}</p>
+                            <p className="text-xs text-red-200/80">Severity: {defect.severity}</p>
+                            <p className="text-xs text-red-200/70">Location: {defect.location}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500">No structured grading data recorded for this media yet.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -775,7 +941,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
     return (
       <>
         {content}
-        {rubricModal}
+        {previewModal}
         {fileInputs}
       </>
     );
@@ -787,7 +953,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
         {content}
       </div>
-      {rubricModal}
+      {previewModal}
       {fileInputs}
     </>
   );
