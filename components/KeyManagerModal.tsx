@@ -132,7 +132,11 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     ], []);
 
     const DEFAULT_DEFECTS: RubricDefect[] = useMemo(() => ([
-      { type: 'Porosity', location: '', severity: 'minor' }
+      {
+        type: 'Defect Type (e.g. Porosity, Undercut, Spatter)',
+        location: 'Location on weld',
+        severity: 'minor'
+      }
     ]), []);
 
     type VisionBuilderState = {
@@ -163,9 +167,14 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
 
     const [visionBuilder, setVisionBuilder] = useState<VisionBuilderState>(() => parseVisionPrompt(settings.visionPrompt ?? null));
     const [showVisionBuilder, setShowVisionBuilder] = useState(false);
+    const [bulkMatchesReference, setBulkMatchesReference] = useState('');
+    const [bulkSeverity, setBulkSeverity] = useState('');
 
     const syncVisionBuilderFromSettings = React.useCallback(() => {
-      setVisionBuilder(parseVisionPrompt(settings.visionPrompt));
+      const parsed = parseVisionPrompt(settings.visionPrompt);
+      setVisionBuilder(parsed);
+      setBulkMatchesReference(parsed.student_observations?.[0]?.matches_reference || '');
+      setBulkSeverity(parsed.detected_defects?.[0]?.severity || '');
     }, [parseVisionPrompt, settings.visionPrompt]);
 
     React.useEffect(() => {
@@ -173,7 +182,19 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     }, [syncVisionBuilderFromSettings]);
 
     const saveVisionBuilderToPrompt = () => {
-      const next = JSON.stringify(visionBuilder, null, 2);
+      const normalized = {
+        rubric_criteria: visionBuilder.rubric_criteria,
+        student_observations: visionBuilder.student_observations.map((obs) => ({
+          ...obs,
+          matches_reference: obs.matches_reference || 'pass'
+        })),
+        detected_defects: visionBuilder.detected_defects.map((def) => ({
+          ...def,
+          severity: def.severity || 'minor'
+        }))
+      };
+
+      const next = JSON.stringify(normalized, null, 2);
       onUpdate({ ...settings, visionPrompt: next });
       setPromptsMessage({ type: 'success', text: 'Vision prompt updated from builder.' });
       setTimeout(() => setPromptsMessage(null), 2500);
@@ -531,6 +552,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                           {visionBuilder.rubric_criteria.map((crit, idx) => (
                             <div key={idx} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
                               <div className="col-span-3 space-y-1">
+                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Feature</span>
                                 <input
                                   value={crit.name}
                                   onChange={(e) => {
@@ -541,7 +563,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                   className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
                                 />
                               </div>
-                              <div className="col-span-4">
+                              <div className="col-span-4 space-y-1">
+                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Pass Criteria</span>
                                 <textarea
                                   value={crit.pass_description}
                                   onChange={(e) => {
@@ -554,7 +577,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                   className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 resize-none"
                                 />
                               </div>
-                              <div className="col-span-4">
+                              <div className="col-span-4 space-y-1">
+                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Fail Criteria</span>
                                 <textarea
                                   value={crit.fail_description}
                                   onChange={(e) => {
@@ -587,18 +611,36 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                         </div>
 
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
                             <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Student Observations</h4>
                             <button
                               type="button"
                               onClick={() => setVisionBuilder((prev) => ({
                                 ...prev,
-                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: 'pass', variance_estimate: '' }]
+                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: bulkMatchesReference || 'pass', variance_estimate: '' }]
                               }))}
                               className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
                             >
                               <Plus className="w-3 h-3" /> Add
                             </button>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <input
+                              value={bulkMatchesReference}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBulkMatchesReference(val);
+                                setVisionBuilder((prev) => ({
+                                  ...prev,
+                                  student_observations: prev.student_observations.map((obs) => ({
+                                    ...obs,
+                                    matches_reference: val || obs.matches_reference || 'pass'
+                                  }))
+                                }));
+                              }}
+                              placeholder="matches_reference (pass/partial/fail)"
+                              className="w-56 bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-zinc-600"
+                            />
                           </div>
                           <div className="space-y-2">
                             {visionBuilder.student_observations.map((obs, idx) => (
@@ -682,23 +724,41 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                         </div>
 
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
                             <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Defects</h4>
                             <button
                               type="button"
                               onClick={() => setVisionBuilder((prev) => ({
                                 ...prev,
-                                detected_defects: [...prev.detected_defects, { type: 'Porosity', location: '', severity: 'minor' }]
+                                detected_defects: [...prev.detected_defects, { type: 'Porosity', location: '', severity: bulkSeverity || 'minor' }]
                               }))}
                               className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
                             >
                               <Plus className="w-3 h-3" /> Add
                             </button>
                           </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <input
+                              value={bulkSeverity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBulkSeverity(val);
+                                setVisionBuilder((prev) => ({
+                                  ...prev,
+                                  detected_defects: prev.detected_defects.map((def) => ({
+                                    ...def,
+                                    severity: val || def.severity || 'minor'
+                                  }))
+                                }));
+                              }}
+                              placeholder="severity (minor/moderate/severe)"
+                              className="w-56 bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-zinc-600"
+                            />
+                          </div>
                           <div className="space-y-2">
                             {visionBuilder.detected_defects.map((def, idx) => (
                               <div key={idx} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
-                                <div className="col-span-3 space-y-1">
+                                <div className="col-span-4 space-y-1">
                                   <input
                                     value={def.type}
                                     onChange={(e) => setVisionBuilder((prev) => {
@@ -708,25 +768,8 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                     })}
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
                                   />
-                                  <select
-                                    value={def.severity}
-                                    onChange={(e) => setVisionBuilder((prev) => {
-                                      const next = [...prev.detected_defects];
-                                      next[idx] = { ...next[idx], severity: e.target.value };
-                                      return { ...prev, detected_defects: next };
-                                    })}
-                                    className={`w-full border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-600 ${
-                                      def.severity === 'minor' ? 'bg-blue-900/20 text-blue-400' :
-                                      def.severity === 'moderate' ? 'bg-amber-900/20 text-amber-400' :
-                                      'bg-red-900/20 text-red-400'
-                                    }`}
-                                  >
-                                    <option value="minor">Minor</option>
-                                    <option value="moderate">Moderate</option>
-                                    <option value="severe">Severe</option>
-                                  </select>
                                 </div>
-                                <div className="col-span-8 space-y-1">
+                                <div className="col-span-7 space-y-1">
                                   <input
                                     value={def.location}
                                     onChange={(e) => setVisionBuilder((prev) => {
