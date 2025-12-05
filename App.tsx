@@ -38,7 +38,7 @@ const mergePrimarySourcesIntoPrompt = (
   const contextBlocks = manifests.map((manifest) => formatPrimarySourceContext(manifest, perSourceBudget)).join('\n\n');
   return `${base}\n\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page inline immediately after the fact. Do NOT include a "Sources" or "References" section at the end of the response.`;
 };
-import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn, Images } from 'lucide-react';
+import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn } from 'lucide-react';
 import { AuthModal } from './components/AuthModal';
 import {
   AppSettings,
@@ -58,7 +58,6 @@ const SettingsModal = React.lazy(() => import('./components/SettingsModal').then
 const SetupModal = React.lazy(() => import('./components/SetupModal').then((module) => ({ default: module.SetupModal })));
 const KeyManagerModal = React.lazy(() => import('./components/KeyManagerModal').then((module) => ({ default: module.KeyManagerModal })));
 const ResultPanel = React.lazy(() => import('./components/ResultPanel').then((module) => ({ default: module.ResultPanel })));
-const PrimarySourceModal = React.lazy(() => import('./components/PrimarySourceModal').then((module) => ({ default: module.PrimarySourceModal })));
 const SaveReferenceModal = React.lazy(() => import('./components/SaveReferenceModal').then((module) => ({ default: module.SaveReferenceModal })));
 
 export default function App() {
@@ -112,7 +111,6 @@ export default function App() {
   const [primarySources, setPrimarySources] = useState<PrimarySourceSummary[]>([]);
   const [primarySourcesLoading, setPrimarySourcesLoading] = useState(false);
   const [primarySourcesError, setPrimarySourcesError] = useState<string | null>(null);
-  const [isPrimarySourceModalOpen, setIsPrimarySourceModalOpen] = useState(false);
   const [isSaveReferenceModalOpen, setIsSaveReferenceModalOpen] = useState(false);
   const [exampleImages, setExampleImages] = useState<ExampleImageSummary[]>([]);
   const [exampleImagesLoading, setExampleImagesLoading] = useState(false);
@@ -130,8 +128,6 @@ export default function App() {
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
-  const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
-  const providerMenuRef = useRef<HTMLDivElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -360,16 +356,11 @@ export default function App() {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setIsUserMenuOpen(false);
       }
-      
-      if (providerMenuRef.current && !providerMenuRef.current.contains(e.target)) {
-        setIsProviderMenuOpen(false);
-      }
     }
 
     function onEsc(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setIsUserMenuOpen(false);
-        setIsProviderMenuOpen(false);
       }
     }
 
@@ -680,63 +671,6 @@ export default function App() {
         </button>
 
         <div className="flex items-center gap-3 relative">
-           <div className="relative" ref={providerMenuRef}>
-            <button
-              onClick={() => setIsProviderMenuOpen(!isProviderMenuOpen)}
-              className="text-xs font-mono text-zinc-600 uppercase tracking-widest hover:text-zinc-400 transition-colors"
-            >
-              {MODEL_LABELS[settings.provider]}
-            </button>
-            
-            {isProviderMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg z-50 py-1">
-                {Object.entries(MODEL_LABELS).map(([key, label]) => {
-                  const isDisabled = !user && key !== 'ollama';
-                  return (
-                    <button
-                      key={key}
-                      disabled={isDisabled}
-                      onClick={() => {
-                        if (isDisabled) return;
-                        setSettings(s => ({ ...s, provider: key as any }));
-                        setIsProviderMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs font-mono uppercase tracking-wider transition-colors ${
-                        settings.provider === key 
-                          ? 'text-white bg-zinc-800' 
-                          : isDisabled
-                            ? 'text-zinc-600 cursor-not-allowed'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => (user ? setIsPrimarySourceModalOpen(true) : setIsAuthOpen(true))}
-            className={`relative p-2 rounded-full transition-colors ${
-              exampleImages.length
-                ? 'text-sky-300 bg-sky-500/10 hover:bg-sky-500/20'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-            title={user ? 'Open reference library' : 'Sign in to view reference library'}
-          >
-            <Images className="w-5 h-5" />
-            {user && exampleImages.length > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] px-1 rounded-full bg-sky-500 text-[10px] text-black font-semibold flex items-center justify-center">
-                {exampleImages.length}
-              </span>
-            )}
-            {isAdminUser && selectedSourceIds.length > 0 && (
-              <span className="absolute -bottom-1 -left-1 h-4 min-w-[1rem] px-1 rounded-full bg-emerald-500 text-[10px] text-black font-semibold flex items-center justify-center">
-                {selectedSourceIds.length}
-              </span>
-            )}
-          </button>
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             className={`p-2 rounded-full transition-colors ${isSettingsOpen ? 'text-white bg-zinc-900' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
@@ -779,8 +713,6 @@ export default function App() {
                       setSettings(prev => ({
                         ...prev,
                         provider: ModelProvider.OLLAMA,
-                        geminiKey: '',
-                        openaiKey: '',
                         ollamaKey: ''
                       }));
                       setIsUserMenuOpen(false);
@@ -844,40 +776,29 @@ export default function App() {
                 settings={settings}
                 onUpdate={setSettings}
                 onKeysUpdated={handleKeysUpdated}
-              />
-            </Suspense>
-          )}
-
-          {user && (
-            <Suspense fallback={null}>
-              <PrimarySourceModal
-                isOpen={isPrimarySourceModalOpen}
-                onClose={() => setIsPrimarySourceModalOpen(false)}
-                canManage={Boolean(user)}
-                isAdmin={isAdminUser}
-                sources={primarySources}
-                selectedIds={selectedSourceIds}
+                primarySources={primarySources}
+                primarySourcesLoading={primarySourcesLoading}
+                primarySourcesError={primarySourcesError}
+                selectedSourceIds={selectedSourceIds}
                 onToggleSource={togglePrimarySource}
-                onUploaded={(source) => {
+                onPrimarySourceUploaded={(source) => {
                   handleSourceUploaded(source);
                   refreshPrimarySources();
                 }}
-                onDeleted={(id) => {
+                onPrimarySourceDeleted={(id) => {
                   handleSourceDeleted(id);
                   refreshPrimarySources();
                 }}
-                onRefresh={refreshPrimarySources}
-                loading={primarySourcesLoading}
-                error={primarySourcesError}
+                onPrimarySourcesRefresh={refreshPrimarySources}
                 referenceImages={exampleImages}
                 referenceImagesLoading={exampleImagesLoading}
                 referenceImagesError={exampleImagesError}
-                onReferenceRefresh={refreshExampleImages}
-                onReferenceUploaded={(image) => {
+                onReferenceImagesRefresh={refreshExampleImages}
+                onReferenceImageUploaded={(image) => {
                   handleExampleUploaded(image);
                   refreshExampleImages();
                 }}
-                onReferenceDeleted={(id) => {
+                onReferenceImageDeleted={(id) => {
                   handleExampleDeleted(id);
                   refreshExampleImages();
                 }}

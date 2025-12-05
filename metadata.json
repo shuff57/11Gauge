@@ -1,6 +1,6 @@
 {
   "name": "Vision Minimal",
-  "description": "A minimal, dark-themed image analysis tool supporting Gemini, OpenAI, and Ollama.",
+  "description": "A minimal, dark-themed image analysis tool powered by Ollama.",
   "requestFramePermissions": [
     "camera"
   ]

@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X, ExternalLink, Layout, Database, FileText } from 'lucide-react';
 import { AppSettings, ModelProvider, SessionUser } from '../types';
-import { MODEL_LABELS, GEMINI_MODELS, MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS, ROD_TYPES } from '../constants';
+import { MODEL_LABELS, MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS, ROD_TYPES } from '../constants';
 import { testConnection, getOllamaKey } from '../services/llm';
 
-type ProviderSlug = 'ollama' | 'gemini' | 'openai';
+type ProviderSlug = 'ollama';
 type Tab = 'general' | 'material';
 
 interface SavedKeySummary {
@@ -14,24 +14,6 @@ interface SavedKeySummary {
   updatedAt: string;
   lastFour?: string | null;
 }
-
-const PROVIDER_FIELD_MAP: Record<ProviderSlug, keyof AppSettings> = {
-  ollama: 'ollamaKey',
-  gemini: 'geminiKey',
-  openai: 'openaiKey'
-};
-
-const PROVIDER_ID_FIELD_MAP: Record<ProviderSlug, keyof AppSettings> = {
-  ollama: 'ollamaKeyId',
-  gemini: 'geminiKeyId',
-  openai: 'openaiKeyId'
-};
-
-const MODEL_TO_PROVIDER: Record<ModelProvider, ProviderSlug> = {
-  [ModelProvider.OLLAMA]: 'ollama',
-  [ModelProvider.GEMINI]: 'gemini',
-  [ModelProvider.OPENAI]: 'openai'
-};
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -66,13 +48,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!response.ok) {
       throw new Error(payload?.error || 'Failed to load saved keys');
     }
-    const validProviders: ProviderSlug[] = ['ollama', 'gemini', 'openai'];
     const parsed: SavedKeySummary[] = Array.isArray(payload?.keys)
       ? payload.keys
-          .filter((key: any) => validProviders.includes(key.provider))
+          .filter((key: any) => key.provider === 'ollama')
           .map((key: any) => ({
             id: key.id,
-            provider: key.provider as ProviderSlug,
+            provider: 'ollama' as ProviderSlug,
             label: key.label,
             updatedAt: key.updatedAt || key.updated_at || '',
             lastFour: key.lastFour ?? key.last_four ?? null,
@@ -188,34 +169,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
-  const savedKeysByProvider = useMemo(() => {
-    const base: Record<ProviderSlug, SavedKeySummary[]> = {
-      ollama: [],
-      gemini: [],
-      openai: []
-    };
-    savedKeys.forEach((key) => {
-      if (base[key.provider]) {
-        base[key.provider].push(key);
-      }
-    });
-    return base;
-  }, [savedKeys]);
+  const savedOllamaKeys = useMemo(() => savedKeys, [savedKeys]);
 
-  const activeProviderSlug = MODEL_TO_PROVIDER[settings.provider];
-  const activeProviderLabel = MODEL_LABELS[settings.provider];
-  const activeProviderKeys = savedKeysByProvider[activeProviderSlug];
-
-  const handleSavedKeySelect = async (provider: ProviderSlug, keyIdStr: string) => {
+  const handleSavedKeySelect = async (keyIdStr: string) => {
     const keyId = keyIdStr ? Number(keyIdStr) : null;
-    
-    // Update the ID in settings immediately
-    onUpdate({ ...settings, [PROVIDER_ID_FIELD_MAP[provider]]: keyId });
+
+    onUpdate({ ...settings, ollamaKeyId: keyId });
 
     if (!keyId) {
-      // If clearing selection, also clear the key value? 
-      // Or keep it? Let's clear it to be safe/consistent.
-      handleChange(PROVIDER_FIELD_MAP[provider], '');
+      handleChange('ollamaKey', '');
       return;
     }
 
@@ -227,12 +189,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const data = await response.json();
       const value = data?.key?.value;
       if (!value) return;
-      
-      // Update both the ID and the Value
-      onUpdate({ 
-        ...settings, 
-        [PROVIDER_ID_FIELD_MAP[provider]]: keyId,
-        [PROVIDER_FIELD_MAP[provider]]: value 
+
+      onUpdate({
+        ...settings,
+        ollamaKeyId: keyId,
+        ollamaKey: value
       });
     } catch (err) {
       console.warn('Unable to load saved key', err);
@@ -288,177 +249,95 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'general' && (
           <div className="space-y-4">
             
-            <div className="space-y-2">
-              <label className="text-sm text-zinc-300">AI Provider</label>
-              <select
-                value={settings.provider}
-                onChange={(e) => handleChange('provider', e.target.value as ModelProvider)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-              >
-                {Object.entries(MODEL_LABELS)
-                  .filter(([key]) => user || key === ModelProvider.OLLAMA)
-                  .map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-              </select>
-            </div>
-
             {user && savedKeysError && (
               <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 {savedKeysError}
               </div>
             )}
 
-            {settings.provider === ModelProvider.GEMINI && (
-              <>
-                {user && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">Use Saved Key</label>
-                    <select
-                      value={settings.geminiKeyId || ''}
-                      onChange={(e) => handleSavedKeySelect('gemini', e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                    >
-                      <option value="">Select a saved key</option>
-                      {savedKeysByProvider.gemini.map((key) => (
-                        <option key={key.id} value={String(key.id)}>
-                          {key.label}
-                        </option>
-                      ))}
-                    </select>
-                    {savedKeysByProvider.gemini.length === 0 && (
-                      <p className="text-[10px] text-zinc-500 pt-1"></p>
-                    )}
-                  </div>
-                )}
-                 <div className="space-y-2">
-                  <label className="text-sm text-zinc-300">Gemini Model</label>
-                  <select
-                    value={settings.geminiModel || 'gemini-2.5-flash'}
-                    onChange={(e) => handleChange('geminiModel', e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                  >
-                    {GEMINI_MODELS.map((model) => (
-                      <option key={model.value} value={model.value}>{model.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            )}
-
-            {settings.provider === ModelProvider.OPENAI && (
-              <div className="space-y-2">
-                {user && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">Use Saved Key</label>
-                    <select
-                      value={settings.openaiKeyId || ''}
-                      onChange={(e) => handleSavedKeySelect('openai', e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                    >
-                      <option value="">Select a saved key</option>
-                      {savedKeysByProvider.openai.map((key) => (
-                        <option key={key.id} value={String(key.id)}>
-                          {key.label}
-                        </option>
-                      ))}
-                    </select>
-                    {savedKeysByProvider.openai.length === 0 && (
-                      <p className="text-[10px] text-zinc-500 pt-1"></p>
-                    )}
-                  </div>
+            {user && (
+              <div className="space-y-1">
+                <label className="text-xs text-zinc-400">Use Saved Key</label>
+                <select
+                  value={settings.ollamaKeyId || ''}
+                  onChange={(e) => handleSavedKeySelect(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                >
+                  <option value="">Select a saved key</option>
+                  {savedOllamaKeys.map((key) => (
+                    <option key={key.id} value={String(key.id)}>
+                      {key.label}
+                    </option>
+                  ))}
+                </select>
+                {savedOllamaKeys.length === 0 && (
+                  <p className="text-[10px] text-zinc-500 pt-1"></p>
                 )}
               </div>
             )}
 
-            {isOllama && (
-              <>
-                {user && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">Use Saved Key</label>
-                    <select
-                      value={settings.ollamaKeyId || ''}
-                      onChange={(e) => handleSavedKeySelect('ollama', e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                    >
-                      <option value="">Select a saved key</option>
-                      {savedKeysByProvider.ollama.map((key) => (
-                        <option key={key.id} value={String(key.id)}>
-                          {key.label}
-                        </option>
-                      ))}
-                    </select>
-                    {savedKeysByProvider.ollama.length === 0 && (
-                      <p className="text-[10px] text-zinc-500 pt-1"></p>
-                    )}
-                  </div>
-                )}
+            <div className="space-y-4 pt-2 border-t border-zinc-800/50">
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300 flex items-center gap-2">
+                  <span>Reasoning Model</span>
+                </label>
+                <select
+                  value={settings.ollamaReasoningModel || ''}
+                  onChange={(e) => handleChange('ollamaReasoningModel', e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                >
+                  <option value="gpt-oss:20b-cloud">gpt-oss:20b-cloud</option>
+                  <option value="kimi-k2:1t-cloud">kimi-k2:1t-cloud</option>
+                  <option value="gpt-oss:120b-cloud">gpt-oss:120b-cloud</option>
+                  <option value="deepseek-v3.1:671b-cloud">deepseek-v3.1:671b-cloud</option>
+                </select>
+              </div>
+            </div>
 
-                <div className="space-y-4 pt-2 border-t border-zinc-800/50">
-                  <div className="space-y-2">
-                    <label className="text-sm text-zinc-300 flex items-center gap-2">
-                      <span>Reasoning Model</span>
-                    </label>
-                    <select
-                      value={settings.ollamaReasoningModel || ''}
-                      onChange={(e) => handleChange('ollamaReasoningModel', e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                    >
-                      <option value="gpt-oss:20b-cloud">gpt-oss:20b-cloud</option>
-                      <option value="kimi-k2:1t-cloud">kimi-k2:1t-cloud</option>
-                      <option value="gpt-oss:120b-cloud">gpt-oss:120b-cloud</option>
-                      <option value="deepseek-v3.1:671b-cloud">deepseek-v3.1:671b-cloud</option>
-                      <option value="gemini-3-pro-preview:latest">gemini-3-pro-preview:latest</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="pt-2">
-                  {settings.ollamaReasoningModel?.includes('gpt-oss') ? (
-                    <div className="space-y-2">
-                      <label className="text-sm text-zinc-300">Thinking Level (GPT-OSS)</label>
-                      <select
-                        value={settings.ollamaThinkingLevel || 'low'}
-                        onChange={(e) => handleChange('ollamaThinkingLevel', e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="ollamaThinking"
-                        checked={settings.ollamaThinking ?? true}
-                        onChange={(e) => handleChange('ollamaThinking', e.target.checked)}
-                        className="rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-blue-500/20"
-                      />
-                      <label htmlFor="ollamaThinking" className="text-sm text-zinc-300 select-none cursor-pointer">
-                        Enable Thinking (Reasoning Trace)
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <p className="text-[10px] text-zinc-500 mb-2">
-                    Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
-                  </p>
-                  <a 
-                    href="https://ollama.com/settings" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+            <div className="pt-2">
+              {settings.ollamaReasoningModel?.includes('gpt-oss') ? (
+                <div className="space-y-2">
+                  <label className="text-sm text-zinc-300">Thinking Level (GPT-OSS)</label>
+                  <select
+                    value={settings.ollamaThinkingLevel || 'low'}
+                    onChange={(e) => handleChange('ollamaThinkingLevel', e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                   >
-                    View Usage & Account Settings (Ollama Cloud)
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
                 </div>
-              </>
-            )}
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="ollamaThinking"
+                    checked={settings.ollamaThinking ?? true}
+                    onChange={(e) => handleChange('ollamaThinking', e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-blue-500/20"
+                  />
+                  <label htmlFor="ollamaThinking" className="text-sm text-zinc-300 select-none cursor-pointer">
+                    Enable Thinking (Reasoning Trace)
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <p className="text-[10px] text-zinc-500 mb-2">
+                Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
+              </p>
+              <a 
+                href="https://ollama.com/settings" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+              >
+                View Usage & Account Settings (Ollama Cloud)
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
 
             {user ? (
               <>

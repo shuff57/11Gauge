@@ -1,7 +1,6 @@
 // Service for handling LLM interactions and media processing
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider, ExampleImageSummary } from "../types";
 import { resolveSystemPrompt, resolveVisionPrompt } from "../constants";
-import { analyzeWithOpenAI, testOpenAIConnection } from "./openai";
 import { getCachedExampleImageUrl } from "./exampleImages";
 
 export const VIDEO_UPLOAD_LIMITS = {
@@ -45,32 +44,32 @@ export const analyzeMedia = async (
   const payload = await buildMediaPayload(file, options?.onProgress);
   options?.onProgress?.({ phase: 'awaiting-model', message: 'Sending media to model...' });
 
-  switch (settings.provider) {
-    case ModelProvider.GEMINI:
-      return finalizeWithProgress(
-        () => import("./gemini").then(({ analyzeWithGemini }) => analyzeWithGemini(payload, settings)),
-        options?.onProgress
-      );
-    case ModelProvider.OPENAI:
-      return finalizeWithProgress(() => analyzeWithOpenAI(payload, settings), options?.onProgress);
-    case ModelProvider.OLLAMA:
-      return finalizeWithProgress(() => analyzeWithOllama(payload, settings, options?.onPartialResponse, options?.onThinking, options?.onMetrics, options?.onProgress, options?.referenceImages, options?.onStructuredAnalysis), options?.onProgress);
-    default:
-      throw new Error("Invalid provider selected");
+  if (settings.provider !== ModelProvider.OLLAMA) {
+    throw new Error("Only the Ollama provider is supported.");
   }
+
+  return finalizeWithProgress(
+    () =>
+      analyzeWithOllama(
+        payload,
+        settings,
+        options?.onPartialResponse,
+        options?.onThinking,
+        options?.onMetrics,
+        options?.onProgress,
+        options?.referenceImages,
+        options?.onStructuredAnalysis
+      ),
+    options?.onProgress
+  );
 };
 
 export const testConnection = async (settings: AppSettings): Promise<void> => {
-  switch (settings.provider) {
-    case ModelProvider.GEMINI:
-      return import("./gemini").then(({ testGeminiConnection }) => testGeminiConnection(settings));
-    case ModelProvider.OPENAI:
-      return testOpenAIConnection(settings);
-    case ModelProvider.OLLAMA:
-      return testOllamaConnection(settings);
-    default:
-      throw new Error("Invalid provider");
+  if (settings.provider !== ModelProvider.OLLAMA) {
+    throw new Error("Only the Ollama provider is supported.");
   }
+
+  return testOllamaConnection(settings);
 };
 
 export const saveOllamaKey = async (key?: string): Promise<boolean> => {

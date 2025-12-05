@@ -179,19 +179,13 @@ const defaultOllamaUrl = nodeEnv?.OLLAMA_URL || '';
 const defaultCloudVisionModel = 'qwen3-vl:235b-instruct-cloud';
 const defaultOllamaModel = nodeEnv?.OLLAMA_MODEL || defaultCloudVisionModel;
 const defaultOllamaKey = '';
-const defaultGeminiKey = '';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   provider: ModelProvider.OLLAMA,
-  geminiKey: defaultGeminiKey,
-  geminiModel: 'gemini-2.5-flash',
-  openaiKey: '',
   ollamaUrl: defaultOllamaUrl,
   ollamaModel: defaultOllamaModel,
   ollamaReasoningModel: 'gpt-oss:20b-cloud',
   ollamaKey: defaultOllamaKey,
-  geminiKeyId: null,
-  openaiKeyId: null,
   ollamaKeyId: null,
   ollamaThinking: true,
   ollamaThinkingLevel: 'low',
@@ -200,16 +194,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const MODEL_LABELS = {
-  [ModelProvider.GEMINI]: 'Google (Gemini)',
-  [ModelProvider.OPENAI]: 'OpenAI (ChatGPT)',
   [ModelProvider.OLLAMA]: 'Ollama (OpenSource)',
 };
-
-export const GEMINI_MODELS = [
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Fast)' },
-  { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
-  { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (Reasoning)' },
-];
 
 export const MATERIAL_TYPES = ['Carbon Steel', 'Stainless Steel', 'Aluminum', 'Titanium', 'Cast Iron', 'Copper'];
 

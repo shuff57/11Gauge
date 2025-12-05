@@ -1,20 +1,13 @@
 export enum ModelProvider {
-  GEMINI = 'GEMINI',
-  OPENAI = 'OPENAI',
   OLLAMA = 'OLLAMA'
 }
 
 export interface AppSettings {
   provider: ModelProvider;
-  geminiKey: string;
-  geminiModel: string;
-  openaiKey: string;
   ollamaUrl: string;
   ollamaModel: string; // Legacy/Single model
   ollamaReasoningModel?: string; // Step 2: Reasoning/Scoring
   ollamaKey: string;
-  geminiKeyId?: number | null;
-  openaiKeyId?: number | null;
   ollamaKeyId?: number | null;
   ollamaThinking?: boolean;
   ollamaThinkingLevel?: 'low' | 'medium' | 'high';

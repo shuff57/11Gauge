@@ -15,9 +15,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1ARYaFdx2arW9joHVDoUfDS
 
 1. Install dependencies:
    `npm install`
-2. Create an `.env.local` file and set any provider keys you want to preload:
+2. Create an `.env.local` file and set any Ollama defaults you want to preload:
    ```
-   GEMINI_API_KEY="your-gemini-key"
    OLLAMA_URL="https://ollama.com/api"
    # Leave this unset to keep the default cloud vision model
    OLLAMA_MODEL="qwen3-vl:235b-instruct-cloud"

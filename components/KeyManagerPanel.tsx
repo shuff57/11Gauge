@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, KeyRound, ShieldCheck, Loader2, Plus, Trash2, Edit3 } from 'lucide-react';
-import { MODEL_LABELS } from '../constants';
-import { ModelProvider } from '../types';
 
 interface ManageKeysPanelProps {
   isOpen: boolean;
@@ -17,19 +15,10 @@ interface StoredKeySummary {
   lastFour?: string | null;
 }
 
-const PROVIDER_OPTS = [
-  { slug: 'ollama', label: MODEL_LABELS[ModelProvider.OLLAMA] },
-  { slug: 'gemini', label: MODEL_LABELS[ModelProvider.GEMINI] },
-  { slug: 'openai', label: MODEL_LABELS[ModelProvider.OPENAI] }
-];
-
-const providerLabel = (slug: string) => {
-  return PROVIDER_OPTS.find((p) => p.slug === slug)?.label || slug;
-};
+const PROVIDER_SLUG = 'ollama';
 
 const defaultFormState = {
   id: null as number | null,
-  provider: 'ollama',
   label: '',
   key: ''
 };
@@ -86,7 +75,7 @@ export const KeyManagerPanel: React.FC<ManageKeysPanelProps> = ({ isOpen, onClos
       }
 
       const payload: Record<string, string> = {
-        provider: form.provider,
+        provider: PROVIDER_SLUG,
         label: form.label.trim()
       };
       if (form.key.trim()) {
@@ -129,7 +118,6 @@ export const KeyManagerPanel: React.FC<ManageKeysPanelProps> = ({ isOpen, onClos
       if (!key) throw new Error('Key not found');
       setForm({
         id: key.id,
-        provider: key.provider,
         label: key.label,
         key: key.value || ''
       });
@@ -189,19 +177,6 @@ export const KeyManagerPanel: React.FC<ManageKeysPanelProps> = ({ isOpen, onClos
               <div className="flex items-center gap-2 text-xs text-zinc-500">
                 <KeyRound className="w-4 h-4" />
                 {isEditing ? 'Update existing key' : 'Add a new API key'}
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Provider</label>
-                <select
-                  value={form.provider}
-                  onChange={(e) => setForm((prev) => ({ ...prev, provider: e.target.value }))}
-                  disabled={isEditing}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:border-zinc-600"
-                >
-                  {PROVIDER_OPTS.map((opt) => (
-                    <option key={opt.slug} value={opt.slug}>{opt.label}</option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className="text-xs text-zinc-400 block mb-1">Label</label>
@@ -270,7 +245,6 @@ export const KeyManagerPanel: React.FC<ManageKeysPanelProps> = ({ isOpen, onClos
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-white">{key.label}</p>
-                    <p className="text-xs text-zinc-500">{providerLabel(key.provider)}</p>
                   </div>
                   <div className="text-xs text-zinc-400 font-mono">
                     {key.lastFour ? `•••• ${key.lastFour}` : '••••'}
