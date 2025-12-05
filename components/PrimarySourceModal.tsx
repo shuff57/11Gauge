@@ -481,7 +481,6 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-widest text-zinc-500">Reference Images</p>
-              <p className="text-lg font-semibold text-white"></p>
             </div>
             <div className="flex gap-2">
               <button
