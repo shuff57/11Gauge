@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
+import { makePromptHumanReadable } from './utils/prompt';
 // Debug panel utility
 const useDebugPanel = () => {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -38,6 +39,7 @@ const mergePrimarySourcesIntoPrompt = (
   const contextBlocks = manifests.map((manifest) => formatPrimarySourceContext(manifest, perSourceBudget)).join('\n\n');
   return `${base}\n\n${contextBlocks}\n\nWhen referencing facts, mention the source title and page inline immediately after the fact. Do NOT include a "Sources" or "References" section at the end of the response.`;
 };
+
 import { Settings, RefreshCw, Zap, Image as ImageIcon, LogIn } from 'lucide-react';
 import { AuthModal } from './components/AuthModal';
 import {
@@ -78,9 +80,9 @@ export default function App() {
     if (!merged.ollamaReasoningModel) {
       merged.ollamaReasoningModel = DEFAULT_SETTINGS.ollamaReasoningModel;
     }
-    if (!merged.systemPrompt) {
-      merged.systemPrompt = DEFAULT_SYSTEM_PROMPT;
-    }
+    const formattedSystemPrompt = makePromptHumanReadable(merged.systemPrompt);
+    merged.systemPrompt = formattedSystemPrompt?.trim() ? formattedSystemPrompt : DEFAULT_SYSTEM_PROMPT;
+    merged.visionPrompt = makePromptHumanReadable(merged.visionPrompt);
     return merged;
   };
 
@@ -319,13 +321,15 @@ export default function App() {
         setSettings((prev) => {
           const next = { ...prev };
           let changed = false;
-          
-          if (data.prompt && prev.systemPrompt !== data.prompt) {
-            next.systemPrompt = data.prompt;
+          const formattedSystemPrompt = makePromptHumanReadable(data.prompt);
+          const formattedVisionPrompt = makePromptHumanReadable(data.visionPrompt);
+
+          if (formattedSystemPrompt && prev.systemPrompt !== formattedSystemPrompt) {
+            next.systemPrompt = formattedSystemPrompt;
             changed = true;
           }
-          if (data.visionPrompt && prev.visionPrompt !== data.visionPrompt) {
-            next.visionPrompt = data.visionPrompt;
+          if (formattedVisionPrompt && prev.visionPrompt !== formattedVisionPrompt) {
+            next.visionPrompt = formattedVisionPrompt;
             changed = true;
           }
           

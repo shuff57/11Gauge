@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users, FileText, RotateCcw, BookMarked } from 'lucide-react';
+import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users, FileText, RotateCcw, BookMarked, Plus } from 'lucide-react';
 import { AppSettings, ExampleImageSummary, ModelProvider, PrimarySourceSummary, SessionUser } from '../types';
 import { DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from '../constants';
 import { testConnection } from '../services/llm';
 import { UserManagementPanel } from './UserManagementPanel';
 import { PrimarySourceModal } from './PrimarySourceModal';
+import { makePromptHumanReadable } from '../utils/prompt';
+import { RubricObservation, RubricDefect } from '../types';
 
 type ProviderSlug = 'ollama';
 type Tab = 'keys' | 'users' | 'prompts' | 'library';
@@ -79,6 +81,103 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
   const [testMessage, setTestMessage] = useState<string>('');
   const [isSavingPrompts, setIsSavingPrompts] = useState(false);
   const [promptsMessage, setPromptsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const displayVisionPrompt = useMemo(
+    () => makePromptHumanReadable(settings.visionPrompt) ?? DEFAULT_VISION_PROMPT,
+    [settings.visionPrompt]
+  );
+  const displaySystemPrompt = useMemo(
+    () => makePromptHumanReadable(settings.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
+    [settings.systemPrompt]
+  );
+
+    const DEFAULT_RUBRIC_CRITERIA = useMemo(() => [
+      { name: 'Bead Consistency', pass_description: 'Uniform width (allow variance up to 15%), straight path', fail_description: 'Significant width variance (>15%), varying height, wandering path' },
+      { name: 'Penetration & Fusion', pass_description: 'Smooth tie-in at toes, no cold lap (<5% length)', fail_description: 'Lack of fusion, cold lap (>5% length), overlap' },
+      { name: 'Profile & Contour', pass_description: 'Appropriate convexity/concavity for joint type', fail_description: 'Excessive reinforcement or concavity' },
+      { name: 'Ripple Pattern', pass_description: 'Evenly spaced ripples (variance <15% acceptable)', fail_description: 'Irregular spacing (>15% variance), coarse ripples' },
+      { name: 'Heat Control', pass_description: 'No undercut (<5% length), appropriate HAZ width', fail_description: 'Undercut (>5% length), excessive HAZ, burn-through' }
+    ], []);
+
+    const DEFAULT_OBSERVATIONS: RubricObservation[] = useMemo(() => [
+      {
+        criterion: 'Bead Consistency',
+        observed_condition: 'Detailed observation of width/height/straightness.',
+        matches_reference: 'pass',
+        variance_estimate: 'e.g. 15% width variance'
+      },
+      {
+        criterion: 'Penetration & Fusion',
+        observed_condition: 'Detailed observation of toes and tie-in.',
+        matches_reference: 'pass',
+        variance_estimate: 'e.g. 5% cold lap length'
+      },
+      {
+        criterion: 'Profile & Contour',
+        observed_condition: 'Detailed observation of crown/flatness.',
+        matches_reference: 'pass',
+        variance_estimate: 'N/A or % deviation'
+      },
+      {
+        criterion: 'Ripple Pattern',
+        observed_condition: 'Detailed observation of ripple spacing.',
+        matches_reference: 'pass',
+        variance_estimate: 'e.g. 25% spacing variance'
+      },
+      {
+        criterion: 'Heat Control',
+        observed_condition: 'Detailed observation of HAZ and undercut.',
+        matches_reference: 'pass',
+        variance_estimate: 'e.g. 8% undercut length'
+      }
+    ], []);
+
+    const DEFAULT_DEFECTS: RubricDefect[] = useMemo(() => ([
+      { type: 'Porosity', location: '', severity: 'minor' }
+    ]), []);
+
+    type VisionBuilderState = {
+      rubric_criteria: typeof DEFAULT_RUBRIC_CRITERIA;
+      student_observations: RubricObservation[];
+      detected_defects: RubricDefect[];
+    };
+
+    const parseVisionPrompt = React.useCallback((raw: string | null | undefined): VisionBuilderState => {
+      try {
+        if (!raw) {
+          throw new Error('missing');
+        }
+        const parsed = JSON.parse(raw);
+        return {
+          rubric_criteria: Array.isArray(parsed?.rubric_criteria) && parsed.rubric_criteria.length ? parsed.rubric_criteria : DEFAULT_RUBRIC_CRITERIA,
+          student_observations: Array.isArray(parsed?.student_observations) && parsed.student_observations.length ? parsed.student_observations : DEFAULT_OBSERVATIONS,
+          detected_defects: Array.isArray(parsed?.detected_defects) && parsed.detected_defects.length ? parsed.detected_defects : DEFAULT_DEFECTS,
+        };
+      } catch {
+        return {
+          rubric_criteria: DEFAULT_RUBRIC_CRITERIA,
+          student_observations: DEFAULT_OBSERVATIONS,
+          detected_defects: DEFAULT_DEFECTS,
+        };
+      }
+    }, [DEFAULT_DEFECTS, DEFAULT_OBSERVATIONS, DEFAULT_RUBRIC_CRITERIA]);
+
+    const [visionBuilder, setVisionBuilder] = useState<VisionBuilderState>(() => parseVisionPrompt(settings.visionPrompt ?? null));
+    const [showVisionBuilder, setShowVisionBuilder] = useState(false);
+
+    const syncVisionBuilderFromSettings = React.useCallback(() => {
+      setVisionBuilder(parseVisionPrompt(settings.visionPrompt));
+    }, [parseVisionPrompt, settings.visionPrompt]);
+
+    React.useEffect(() => {
+      syncVisionBuilderFromSettings();
+    }, [syncVisionBuilderFromSettings]);
+
+    const saveVisionBuilderToPrompt = () => {
+      const next = JSON.stringify(visionBuilder, null, 2);
+      onUpdate({ ...settings, visionPrompt: next });
+      setPromptsMessage({ type: 'success', text: 'Vision prompt updated from builder.' });
+      setTimeout(() => setPromptsMessage(null), 2500);
+    };
 
   const fetchSavedKeysFromApi = React.useCallback(async (): Promise<SavedKeySummary[]> => {
     if (!user) return [];
@@ -375,28 +474,308 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                 <div className="space-y-6 p-1">
                   {/* Vision Prompt Section */}
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div>
                         <h3 className="text-sm font-medium text-white">Vision Prompt (Step 1)</h3>
                         <p className="text-[10px] text-zinc-400">
                           Controls how the vision model analyzes the image/video frames. Must output JSON.
                         </p>
                       </div>
-                      <button
-                        onClick={() => onUpdate({ ...settings, visionPrompt: null })}
-                        className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
-                        title="Reset to default vision prompt"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        Reset Default
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={syncVisionBuilderFromSettings}
+                          className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+                          title="Refresh builder from current prompt"
+                        >
+                          <RefreshCcw className="w-3 h-3" />
+                          Sync
+                        </button>
+                        <button
+                          onClick={() => setShowVisionBuilder((prev) => !prev)}
+                          className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-white bg-blue-600 hover:bg-blue-500 rounded transition-colors"
+                        >
+                          {showVisionBuilder ? 'Hide Builder' : 'Edit as Form'}
+                        </button>
+                        <button
+                          onClick={() => onUpdate({ ...settings, visionPrompt: null })}
+                          className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+                          title="Reset to default vision prompt"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Reset Default
+                        </button>
+                      </div>
                     </div>
                     <textarea
-                      value={settings.visionPrompt ?? DEFAULT_VISION_PROMPT}
+                      value={displayVisionPrompt}
                       onChange={(e) => onUpdate({ ...settings, visionPrompt: e.target.value })}
-                      className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
+                      className="w-full h-48 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
                       spellCheck={false}
                     />
+                    {showVisionBuilder && (
+                      <div className="space-y-4 mt-3 border border-zinc-800 rounded-xl p-3 bg-zinc-900/50">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Grading Criteria</h4>
+                          <button
+                            type="button"
+                            onClick={() => setVisionBuilder((prev) => ({
+                              ...prev,
+                              rubric_criteria: [...prev.rubric_criteria, { name: 'New Criterion', pass_description: '', fail_description: '' }]
+                            }))}
+                            className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
+                          >
+                            <Plus className="w-3 h-3" /> Add
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {visionBuilder.rubric_criteria.map((crit, idx) => (
+                            <div key={idx} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
+                              <div className="col-span-3 space-y-1">
+                                <input
+                                  value={crit.name}
+                                  onChange={(e) => {
+                                    const next = [...visionBuilder.rubric_criteria];
+                                    next[idx] = { ...next[idx], name: e.target.value };
+                                    setVisionBuilder((prev) => ({ ...prev, rubric_criteria: next }));
+                                  }}
+                                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
+                                />
+                              </div>
+                              <div className="col-span-4">
+                                <textarea
+                                  value={crit.pass_description}
+                                  onChange={(e) => {
+                                    const next = [...visionBuilder.rubric_criteria];
+                                    next[idx] = { ...next[idx], pass_description: e.target.value };
+                                    setVisionBuilder((prev) => ({ ...prev, rubric_criteria: next }));
+                                  }}
+                                  placeholder="Pass description"
+                                  rows={2}
+                                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 resize-none"
+                                />
+                              </div>
+                              <div className="col-span-4">
+                                <textarea
+                                  value={crit.fail_description}
+                                  onChange={(e) => {
+                                    const next = [...visionBuilder.rubric_criteria];
+                                    next[idx] = { ...next[idx], fail_description: e.target.value };
+                                    setVisionBuilder((prev) => ({ ...prev, rubric_criteria: next }));
+                                  }}
+                                  placeholder="Fail description"
+                                  rows={2}
+                                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 resize-none"
+                                />
+                              </div>
+                              <div className="col-span-1 flex justify-center pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setVisionBuilder((prev) => ({
+                                    ...prev,
+                                    rubric_criteria: prev.rubric_criteria.filter((_, i) => i !== idx)
+                                  }))}
+                                  className="text-zinc-600 hover:text-red-400 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                          {visionBuilder.rubric_criteria.length === 0 && (
+                            <p className="text-xs text-zinc-600 italic text-center py-2">No criteria defined.</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Student Observations</h4>
+                            <button
+                              type="button"
+                              onClick={() => setVisionBuilder((prev) => ({
+                                ...prev,
+                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: 'pass', variance_estimate: '' }]
+                              }))}
+                              className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
+                            >
+                              <Plus className="w-3 h-3" /> Add
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {visionBuilder.student_observations.map((obs, idx) => (
+                              <div key={idx} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
+                                <div className="col-span-3 space-y-1">
+                                  <select
+                                    value={obs.criterion}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.student_observations];
+                                      next[idx] = { ...next[idx], criterion: e.target.value };
+                                      return { ...prev, student_observations: next };
+                                    })}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
+                                  >
+                                    {visionBuilder.rubric_criteria.map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                    {!visionBuilder.rubric_criteria.find((c) => c.name === obs.criterion) && (
+                                      <option value={obs.criterion}>{obs.criterion}</option>
+                                    )}
+                                  </select>
+                                  <select
+                                    value={obs.matches_reference}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.student_observations];
+                                      next[idx] = { ...next[idx], matches_reference: e.target.value };
+                                      return { ...prev, student_observations: next };
+                                    })}
+                                    className={`w-full border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-600 ${
+                                      obs.matches_reference === 'pass' ? 'bg-emerald-900/20 text-emerald-400' :
+                                      obs.matches_reference === 'fail' ? 'bg-red-900/20 text-red-400' :
+                                      'bg-amber-900/20 text-amber-400'
+                                    }`}
+                                  >
+                                    <option value="pass">PASS</option>
+                                    <option value="partial">PARTIAL</option>
+                                    <option value="fail">FAIL</option>
+                                  </select>
+                                </div>
+                                <div className="col-span-8 space-y-1">
+                                  <textarea
+                                    value={obs.observed_condition}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.student_observations];
+                                      next[idx] = { ...next[idx], observed_condition: e.target.value };
+                                      return { ...prev, student_observations: next };
+                                    })}
+                                    placeholder="Observation details..."
+                                    rows={2}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 resize-none"
+                                  />
+                                  <input
+                                    value={obs.variance_estimate || ''}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.student_observations];
+                                      next[idx] = { ...next[idx], variance_estimate: e.target.value };
+                                      return { ...prev, student_observations: next };
+                                    })}
+                                    placeholder="Variance estimate (optional)"
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600"
+                                  />
+                                </div>
+                                <div className="col-span-1 flex justify-center pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setVisionBuilder((prev) => ({
+                                      ...prev,
+                                      student_observations: prev.student_observations.filter((_, i) => i !== idx)
+                                    }))}
+                                    className="text-zinc-600 hover:text-red-400 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {visionBuilder.student_observations.length === 0 && (
+                              <p className="text-xs text-zinc-600 italic text-center py-2">No observations defined.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Defects</h4>
+                            <button
+                              type="button"
+                              onClick={() => setVisionBuilder((prev) => ({
+                                ...prev,
+                                detected_defects: [...prev.detected_defects, { type: 'Porosity', location: '', severity: 'minor' }]
+                              }))}
+                              className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
+                            >
+                              <Plus className="w-3 h-3" /> Add
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {visionBuilder.detected_defects.map((def, idx) => (
+                              <div key={idx} className="grid grid-cols-12 gap-2 items-start bg-zinc-900 p-2 rounded-lg border border-zinc-800">
+                                <div className="col-span-3 space-y-1">
+                                  <input
+                                    value={def.type}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.detected_defects];
+                                      next[idx] = { ...next[idx], type: e.target.value };
+                                      return { ...prev, detected_defects: next };
+                                    })}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
+                                  />
+                                  <select
+                                    value={def.severity}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.detected_defects];
+                                      next[idx] = { ...next[idx], severity: e.target.value };
+                                      return { ...prev, detected_defects: next };
+                                    })}
+                                    className={`w-full border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-600 ${
+                                      def.severity === 'minor' ? 'bg-blue-900/20 text-blue-400' :
+                                      def.severity === 'moderate' ? 'bg-amber-900/20 text-amber-400' :
+                                      'bg-red-900/20 text-red-400'
+                                    }`}
+                                  >
+                                    <option value="minor">Minor</option>
+                                    <option value="moderate">Moderate</option>
+                                    <option value="severe">Severe</option>
+                                  </select>
+                                </div>
+                                <div className="col-span-8 space-y-1">
+                                  <input
+                                    value={def.location}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.detected_defects];
+                                      next[idx] = { ...next[idx], location: e.target.value };
+                                      return { ...prev, detected_defects: next };
+                                    })}
+                                    placeholder="Location (e.g. start, mid, end)"
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600"
+                                  />
+                                </div>
+                                <div className="col-span-1 flex justify-center pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setVisionBuilder((prev) => ({
+                                      ...prev,
+                                      detected_defects: prev.detected_defects.filter((_, i) => i !== idx)
+                                    }))}
+                                    className="text-zinc-600 hover:text-red-400 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {visionBuilder.detected_defects.length === 0 && (
+                              <p className="text-xs text-zinc-600 italic text-center py-2">No defects defined.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={syncVisionBuilderFromSettings}
+                            className="px-3 py-1.5 text-[11px] font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg"
+                          >
+                            Reset Changes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveVisionBuilderToPrompt}
+                            className="px-3 py-1.5 text-[11px] font-medium text-black bg-white hover:bg-zinc-200 rounded-lg"
+                          >
+                            Update Vision Prompt
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Reasoning Prompt Section */}
@@ -418,7 +797,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                       </button>
                     </div>
                     <textarea
-                      value={settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT}
+                      value={displaySystemPrompt}
                       onChange={(e) => onUpdate({ ...settings, systemPrompt: e.target.value })}
                       className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
                       spellCheck={false}
