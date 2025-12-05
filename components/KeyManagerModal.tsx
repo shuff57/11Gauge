@@ -102,31 +102,31 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
       {
         criterion: 'Bead Consistency',
         observed_condition: 'Detailed observation of width/height/straightness.',
-        matches_reference: 'pass',
+        matches_reference: 'pass | partial | fail',
         variance_estimate: 'e.g. 15% width variance'
       },
       {
         criterion: 'Penetration & Fusion',
         observed_condition: 'Detailed observation of toes and tie-in.',
-        matches_reference: 'pass',
+        matches_reference: 'pass | partial | fail',
         variance_estimate: 'e.g. 5% cold lap length'
       },
       {
         criterion: 'Profile & Contour',
         observed_condition: 'Detailed observation of crown/flatness.',
-        matches_reference: 'pass',
+        matches_reference: 'pass | partial | fail',
         variance_estimate: 'N/A or % deviation'
       },
       {
         criterion: 'Ripple Pattern',
         observed_condition: 'Detailed observation of ripple spacing.',
-        matches_reference: 'pass',
+        matches_reference: 'pass | partial | fail',
         variance_estimate: 'e.g. 25% spacing variance'
       },
       {
         criterion: 'Heat Control',
         observed_condition: 'Detailed observation of HAZ and undercut.',
-        matches_reference: 'pass',
+        matches_reference: 'pass | partial | fail',
         variance_estimate: 'e.g. 8% undercut length'
       }
     ], []);
@@ -173,7 +173,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     const syncVisionBuilderFromSettings = React.useCallback(() => {
       const parsed = parseVisionPrompt(settings.visionPrompt);
       setVisionBuilder(parsed);
-      setBulkMatchesReference(parsed.student_observations?.[0]?.matches_reference || '');
+      setBulkMatchesReference(parsed.student_observations?.[0]?.matches_reference || 'pass | partial | fail');
       setBulkSeverity(parsed.detected_defects?.[0]?.severity || '');
     }, [parseVisionPrompt, settings.visionPrompt]);
 
@@ -186,7 +186,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
         rubric_criteria: visionBuilder.rubric_criteria,
         student_observations: visionBuilder.student_observations.map((obs) => ({
           ...obs,
-          matches_reference: obs.matches_reference || 'pass'
+          matches_reference: obs.matches_reference || 'pass | partial | fail'
         })),
         detected_defects: visionBuilder.detected_defects.map((def) => ({
           ...def,
@@ -617,7 +617,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                               type="button"
                               onClick={() => setVisionBuilder((prev) => ({
                                 ...prev,
-                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: bulkMatchesReference || 'pass', variance_estimate: '' }]
+                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: bulkMatchesReference || 'pass | partial | fail', variance_estimate: '' }]
                               }))}
                               className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
                             >
@@ -661,23 +661,6 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                     {!visionBuilder.rubric_criteria.find((c) => c.name === obs.criterion) && (
                                       <option value={obs.criterion}>{obs.criterion}</option>
                                     )}
-                                  </select>
-                                  <select
-                                    value={obs.matches_reference}
-                                    onChange={(e) => setVisionBuilder((prev) => {
-                                      const next = [...prev.student_observations];
-                                      next[idx] = { ...next[idx], matches_reference: e.target.value };
-                                      return { ...prev, student_observations: next };
-                                    })}
-                                    className={`w-full border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-600 ${
-                                      obs.matches_reference === 'pass' ? 'bg-emerald-900/20 text-emerald-400' :
-                                      obs.matches_reference === 'fail' ? 'bg-red-900/20 text-red-400' :
-                                      'bg-amber-900/20 text-amber-400'
-                                    }`}
-                                  >
-                                    <option value="pass">PASS</option>
-                                    <option value="partial">PARTIAL</option>
-                                    <option value="fail">FAIL</option>
                                   </select>
                                 </div>
                                 <div className="col-span-8 space-y-1">
@@ -766,6 +749,16 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                       next[idx] = { ...next[idx], type: e.target.value };
                                       return { ...prev, detected_defects: next };
                                     })}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
+                                  />
+                                  <input
+                                    value={def.severity || ''}
+                                    onChange={(e) => setVisionBuilder((prev) => {
+                                      const next = [...prev.detected_defects];
+                                      next[idx] = { ...next[idx], severity: e.target.value };
+                                      return { ...prev, detected_defects: next };
+                                    })}
+                                    placeholder="minor | moderate | severe"
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-zinc-600"
                                   />
                                 </div>
