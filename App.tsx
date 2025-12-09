@@ -129,6 +129,7 @@ export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
   const primaryFile = selectedFiles[activeIndex] || null;
   const primaryPreviewUrl = previewUrls[activeIndex] || null;
   const hasSelection = selectedFiles.length > 0;
@@ -554,6 +555,44 @@ export default function App() {
     setProgressLog([]);
   };
 
+  useEffect(() => {
+    if (previewUrls.length === 0) {
+      setActiveIndex(0);
+      return;
+    }
+    setActiveIndex((idx) => Math.min(idx, previewUrls.length - 1));
+  }, [previewUrls.length]);
+
+  const handlePrevImage = () => {
+    setActiveIndex((idx) => {
+      if (previewUrls.length === 0) return 0;
+      return idx === 0 ? previewUrls.length - 1 : idx - 1;
+    });
+  };
+
+  const handleNextImage = () => {
+    setActiveIndex((idx) => {
+      if (previewUrls.length === 0) return 0;
+      return idx === previewUrls.length - 1 ? 0 : idx + 1;
+    });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const delta = e.changedTouches[0]?.clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(delta) < 40) return;
+    if (delta > 0) {
+      handlePrevImage();
+    } else {
+      handleNextImage();
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!selectedFiles.length) return;
 
@@ -683,24 +722,20 @@ export default function App() {
       </div>
 
       <div className="relative flex flex-col h-full w-full">
-      
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-900/50 shrink-0">
-        <button 
-          onClick={handleReset}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all"
-        >
-          {result ? (
-            <>
-              <RefreshCw className="w-4 h-4" />
-              <span className="font-medium">New Scan</span>
-            </>
-          ) : (
-            <>
+        <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-900/50 shrink-0">
+          <button 
+            onClick={handleReset}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all"
+          >
+            {result ? (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                <span className="font-medium">New Scan</span>
+              </>
+            ) : (
               <span className="font-bold text-xl text-white tracking-tight">11GAUGE</span>
-            </>
-          )}
-        </button>
+            )}
+          </button>
 
         <div className="flex items-center gap-3 relative">
           <button 
@@ -939,7 +974,11 @@ export default function App() {
             <div className="flex-1 flex flex-col gap-8 pb-32">
               {/* Image Preview */}
               <div className="w-full flex justify-center animate-in zoom-in-95 duration-300">
-                <div className="relative group rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl max-h-[50vh] bg-black">
+                <div
+                  className="relative group rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl max-h-[50vh] bg-black"
+                  onTouchStart={mediaKind === 'image' && previewUrls.length > 1 ? handleTouchStart : undefined}
+                  onTouchEnd={mediaKind === 'image' && previewUrls.length > 1 ? handleTouchEnd : undefined}
+                >
                   {mediaKind === 'video' ? (
                     <video
                       src={primaryPreviewUrl ?? undefined}
@@ -959,6 +998,25 @@ export default function App() {
                     <span className="absolute top-3 left-3 px-3 py-1 text-xs font-semibold rounded-full bg-black/70 text-white uppercase tracking-widest">
                       {mediaKind === 'video' ? 'Video Clip' : selectedFiles.length > 1 ? `Photos (${selectedFiles.length})` : 'Photo'}
                     </span>
+                  )}
+
+                  {mediaKind === 'image' && previewUrls.length > 1 && (
+                    <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-3">
+                      <button
+                        onClick={handlePrevImage}
+                        className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 border border-white/10"
+                        aria-label="Previous photo"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        onClick={handleNextImage}
+                        className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 border border-white/10"
+                        aria-label="Next photo"
+                      >
+                        ›
+                      </button>
+                    </div>
                   )}
                   {!isAnalyzing && !result && (
                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
