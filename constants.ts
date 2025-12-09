@@ -80,15 +80,18 @@ Professional, constructive, and encouraging. Focus on technical precision but hi
 Do not include a "Sources" or "References" list at the end.
 `;
 
-export const DEFAULT_VISION_PROMPT = `Analyze the provided image of a weld. You are an experienced welding instructor. Your job is to identify key areas for improvement while recognizing good technique.
+export const DEFAULT_VISION_PROMPT = `Analyze the provided image of a weld. You are an experienced welding instructor documenting observations. Be unbiased and descriptive—do NOT grade or use pass/fail language. Use the handbook definitions for every attribute and defect you mention.
 
-CRITICAL INSTRUCTION:
-Identify both strengths and areas for improvement. Distinguish between major structural defects and minor cosmetic imperfections.
+OBJECTIVE:
+- Capture objective measurements and descriptors for each defined attribute.
+- Note defects with location and severity using handbook terminology.
 
-Analyze these aspects and ESTIMATE VARIANCE PERCENTAGES:
-1. Bead Consistency (width variance %, straightness deviation)
+Do not decide whether the weld is within tolerance; only describe what you see as precisely as possible.
+
+Analyze and estimate (using handbook definitions for each term):
+1. Bead Consistency (average width, variance %, straightness deviation)
 2. Penetration & Fusion (cold lap length % vs total weld length)
-3. Surface Profile (convexity, concavity)
+3. Surface Profile (convexity/concavity)
 4. Defects (undercut length % vs total weld length)
 5. Heat Affected Zone (width consistency)
 6. Ripple Pattern (spacing variance %)
@@ -101,60 +104,60 @@ Return ONLY this JSON structure:
   "rubric_criteria": [
     {
       "name": "Bead Consistency",
-      "pass_description": "Uniform width (allow variance up to 15%), straight path",
-      "fail_description": "Significant width variance (>15%), varying height, wandering path"
+      "measurement_notes": "Record average bead width, variance %, and straightness deviation.",
+      "key_indicators": "Look for uniform bead appearance and straight travel; flag noticeable swings or wandering."
     },
     {
       "name": "Penetration & Fusion",
-      "pass_description": "Smooth tie-in at toes, no cold lap (<5% length)",
-      "fail_description": "Lack of fusion, cold lap (>5% length), overlap"
+      "measurement_notes": "Capture toe tie-in quality, fusion cues, and cold lap length % of total weld.",
+      "key_indicators": "Note smooth tie-in and absence of overlap; flag visible lack of fusion or cold lap segments."
     },
     {
       "name": "Profile & Contour",
-      "pass_description": "Appropriate convexity/concavity for joint type",
-      "fail_description": "Excessive reinforcement or concavity"
+      "measurement_notes": "Describe crown shape and degree of convexity/concavity.",
+      "key_indicators": "Check for appropriate crown shape; flag obvious over-build or concavity outside expected profile."
     },
     {
       "name": "Ripple Pattern",
-      "pass_description": "Evenly spaced, distinct ripples (variance <15% acceptable)",
-      "fail_description": "Irregular spacing (>15% variance), coarse ripples"
+      "measurement_notes": "Describe ripple spacing uniformity and pattern clarity.",
+      "key_indicators": "Expect consistent ripple spacing and clarity; flag coarse or irregular patterns."
     },
     {
       "name": "Heat Control",
-      "pass_description": "No undercut (or <5% length), appropriate HAZ width",
-      "fail_description": "Undercut (>5% length), excessive HAZ, burn-through"
+      "measurement_notes": "Estimate HAZ width and undercut presence/length.",
+      "key_indicators": "Look for minimal undercut and controlled HAZ; flag obvious burn-through or excessive HAZ."
     }
   ],
   "student_observations": [
     {
       "criterion": "Bead Consistency",
-      "observed_condition": "Detailed observation of width/height/straightness.",
-      "variance_estimate": "e.g. 15% width variance",
-      "matches_reference": "pass | partial | fail"
+      "observed_condition": "Avg width ~6.2mm; variance +/-0.8mm (~13%). Path mostly straight.",
+      "variance_estimate": "+/-13%",
+      "matches_reference": "not_evaluated"
     },
     {
       "criterion": "Penetration & Fusion",
-      "observed_condition": "Detailed observation of toes and tie-in.",
-      "variance_estimate": "e.g. 5% cold lap length",
-      "matches_reference": "pass | partial | fail"
+      "observed_condition": "Toe tie-in smooth; cold lap noted near start.",
+      "variance_estimate": "~4% cold lap length",
+      "matches_reference": "not_evaluated"
     },
     {
       "criterion": "Profile & Contour",
-      "observed_condition": "Detailed observation of crown/flatness.",
+      "observed_condition": "Slightly convex crown; within expected profile for joint.",
       "variance_estimate": "N/A or % deviation",
-      "matches_reference": "pass | partial | fail"
+      "matches_reference": "not_evaluated"
     },
     {
       "criterion": "Ripple Pattern",
-      "observed_condition": "Detailed observation of ripple spacing.",
-      "variance_estimate": "e.g. 25% spacing variance",
-      "matches_reference": "pass | partial | fail"
+      "observed_condition": "Ripples mostly even; tighter spacing at end.",
+      "variance_estimate": "~12% spacing variance",
+      "matches_reference": "not_evaluated"
     },
     {
       "criterion": "Heat Control",
-      "observed_condition": "Detailed observation of HAZ and undercut.",
-      "variance_estimate": "e.g. 8% undercut length",
-      "matches_reference": "pass | partial | fail"
+      "observed_condition": "HAZ width even; slight undercut near mid-length.",
+      "variance_estimate": "~6% undercut length",
+      "matches_reference": "not_evaluated"
     }
   ],
   "detected_defects": [

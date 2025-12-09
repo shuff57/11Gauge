@@ -64,7 +64,7 @@ export type ExampleImageLabel = 'good' | 'bad';
 export interface RubricObservation {
   criterion: string;
   observed_condition: string;
-  matches_reference: string; // 'pass' | 'fail' | 'partial'
+  matches_reference: string; // tolerance status (e.g., within_tolerance | borderline | out_of_tolerance)
   score?: string;
   variance_estimate?: string;
 }

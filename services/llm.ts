@@ -193,14 +193,20 @@ The subsequent images are reference examples:`;
   const visionModel = "qwen3-vl:235b-instruct-cloud";
   const usePipeline = Boolean(settings.ollamaReasoningModel);
 
+  const normalizeVisionStatus = (value?: string | null) => {
+    const lower = (value || '').toLowerCase().trim();
+    if (lower === 'pass') return 'within_tolerance';
+    if (lower === 'fail') return 'out_of_tolerance';
+    if (lower === 'partial') return 'borderline';
+    if (['within_tolerance', 'borderline', 'out_of_tolerance', 'not_evaluated'].includes(lower)) return lower;
+    return lower || 'not_evaluated';
+  };
+
   if (usePipeline) {
     // STEP 1: Vision Extraction
     onProgress?.({ phase: 'awaiting-model', message: 'Analyzing visual features (Step 1/2)...' });
     
     let visionPrompt = resolveVisionPrompt(settings.visionPrompt);
-    if (referenceContext) {
-      visionPrompt += referenceContext;
-    }
 
     const visionResponse = await fetchOllamaGenerate({
       url: configuredUrl,
@@ -243,8 +249,10 @@ The subsequent images are reference examples:`;
       if (data.student_observations && Array.isArray(data.student_observations)) {
         readable += "**🔍 Observations:**\n";
         data.student_observations.forEach((o: any) => {
-          const status = o.matches_reference === 'pass' ? '✅' : o.matches_reference === 'fail' ? '❌' : '⚠️';
-          readable += `- ${status} **${o.criterion}**: ${o.observed_condition}\n`;
+          const tol = normalizeVisionStatus(o.matches_reference);
+          const statusIcon = tol === 'within_tolerance' ? '✅' : tol === 'out_of_tolerance' ? '❌' : tol === 'borderline' ? '⚠️' : 'ℹ️';
+          const label = tol.replace(/_/g, ' ');
+          readable += `- ${statusIcon} **${o.criterion}** (${label}): ${o.observed_condition}\n`;
         });
       }
       
@@ -270,7 +278,13 @@ The subsequent images are reference examples:`;
       const findings = JSON.parse(jsonStr);
       
       const defects = findings.detected_defects?.map((d: any) => d.type).join(', ');
-      const observations = findings.student_observations?.filter((o: any) => o.matches_reference === 'fail').map((o: any) => o.criterion).join(', ');
+      const observations = findings.student_observations
+        ?.filter((o: any) => {
+          const status = normalizeVisionStatus(o.matches_reference);
+          return status !== 'within_tolerance' && status !== 'not_evaluated';
+        })
+        .map((o: any) => o.criterion)
+        .join(', ');
       
       const parts = [];
       if (settings.weldProcess) parts.push(settings.weldProcess);
@@ -299,6 +313,11 @@ The subsequent images are reference examples:`;
 
     if (materialContext.length > 0) {
       reasoningPrompt += `CONTEXT:\nThe user has provided the following specifications for this weld:\n${materialContext.join('\n')}\n\n`;
+    }
+
+    // Inject reference images context here (reasoning step only) so grading compares against exemplars/defectives.
+    if (referenceContext) {
+      reasoningPrompt += `${referenceContext}\n\n`;
     }
 
     reasoningPrompt += `You are provided with structured visual observations in JSON format below.
@@ -398,7 +417,7 @@ Based on the visual analysis above and the provided context, evaluate the weld a
             return {
               ...obs,
               score: r.score,
-              matches_reference: r.status.includes('pass') ? 'pass' : r.status.includes('fail') ? 'fail' : 'partial',
+              matches_reference: normalizeVisionStatus(r.status),
               // We append the reasoning notes to the vision observation for completeness
               observed_condition: r.notes ? `${obs.observed_condition} \n\nInstructor Note: ${r.notes}` : obs.observed_condition
             };

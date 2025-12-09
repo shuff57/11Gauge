@@ -42,7 +42,7 @@ const DEFECT_TYPES = [
 ];
 
 const SEVERITY_LEVELS = ["minor", "moderate", "severe"];
-const MATCH_STATUSES = ["pass", "partial", "fail"];
+const MATCH_STATUSES = ["within_tolerance", "borderline", "out_of_tolerance"];
 
 interface RubricFormProps {
   data: StructuredAnalysis;
@@ -73,11 +73,11 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
 
   const addObservation = () => {
     onChange({
-      ...data,
-      student_observations: [
-        ...observations,
-        { criterion: RUBRIC_CRITERIA[0], observed_condition: '', matches_reference: 'pass', score: '' }
-      ]
+        ...data,
+        student_observations: [
+          ...observations,
+          { criterion: RUBRIC_CRITERIA[0], observed_condition: '', matches_reference: 'within_tolerance', score: '' }
+        ]
     });
   };
 
@@ -130,7 +130,7 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Grading Criteria</h4>
+          <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Observation Criteria</h4>
           <button
             type="button"
             onClick={addObservation}
@@ -163,12 +163,12 @@ const RubricForm: React.FC<RubricFormProps> = ({ data, onChange }) => {
                     value={obs.matches_reference}
                     onChange={(e) => updateObservation(i, 'matches_reference', e.target.value)}
                     className={`flex-1 border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-600 ${
-                      obs.matches_reference === 'pass' ? 'bg-emerald-900/20 text-emerald-400' :
-                      obs.matches_reference === 'fail' ? 'bg-red-900/20 text-red-400' :
+                      obs.matches_reference === 'within_tolerance' ? 'bg-emerald-900/20 text-emerald-400' :
+                      obs.matches_reference === 'out_of_tolerance' ? 'bg-red-900/20 text-red-400' :
                       'bg-amber-900/20 text-amber-400'
                     }`}
                   >
-                    {MATCH_STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                    {MATCH_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ').toUpperCase()}</option>)}
                   </select>
                 </div>
               </div>

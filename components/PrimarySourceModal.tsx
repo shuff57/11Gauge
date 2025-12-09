@@ -892,7 +892,7 @@ export const PrimarySourceModal: React.FC<PrimarySourceModalProps> = ({
                           <p className="text-sm font-semibold text-white">{obs.criterion}</p>
                           <p className="text-xs text-zinc-400 mt-1">{obs.observed_condition}</p>
                           <p className="text-[11px] text-zinc-500 mt-1">
-                            Match: <span className="text-white">{obs.matches_reference}</span>
+                            Status: <span className="text-white">{obs.matches_reference ? obs.matches_reference.replace(/_/g, ' ') : 'not provided'}</span>
                             {obs.score && <span className="ml-2">Score: {obs.score}</span>}
                           </p>
                           {obs.variance_estimate && (

@@ -90,46 +90,77 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     [settings.systemPrompt]
   );
 
+  const DEFAULT_STATUS = 'not_evaluated';
+
+  const normalizeToleranceStatus = React.useCallback((value?: string | null) => {
+    const lower = (value || '').toLowerCase().trim();
+    if (lower === 'pass') return 'within_tolerance';
+    if (lower === 'fail') return 'out_of_tolerance';
+    if (lower === 'partial') return 'borderline';
+    if (['within_tolerance', 'borderline', 'out_of_tolerance', 'not_evaluated'].includes(lower)) return lower;
+    return value || DEFAULT_STATUS;
+  }, [DEFAULT_STATUS]);
+
     const DEFAULT_RUBRIC_CRITERIA = useMemo(() => [
-      { name: 'Bead Consistency', pass_description: 'Uniform width (allow variance up to 15%), straight path', fail_description: 'Significant width variance (>15%), varying height, wandering path' },
-      { name: 'Penetration & Fusion', pass_description: 'Smooth tie-in at toes, no cold lap (<5% length)', fail_description: 'Lack of fusion, cold lap (>5% length), overlap' },
-      { name: 'Profile & Contour', pass_description: 'Appropriate convexity/concavity for joint type', fail_description: 'Excessive reinforcement or concavity' },
-      { name: 'Ripple Pattern', pass_description: 'Evenly spaced ripples (variance <15% acceptable)', fail_description: 'Irregular spacing (>15% variance), coarse ripples' },
-      { name: 'Heat Control', pass_description: 'No undercut (<5% length), appropriate HAZ width', fail_description: 'Undercut (>5% length), excessive HAZ, burn-through' }
+      {
+        name: 'Bead Consistency',
+        measurement_notes: 'Record average bead width, variance %, and straightness deviation using handbook definitions.',
+        key_indicators: 'Look for uniform bead appearance and straight travel; flag noticeable swings or wandering.'
+      },
+      {
+        name: 'Penetration & Fusion',
+        measurement_notes: 'Capture toe tie-in quality, fusion cues, and cold lap length % of total weld per handbook definitions.',
+        key_indicators: 'Note smooth tie-in and absence of overlap; flag visible lack of fusion or cold lap segments.'
+      },
+      {
+        name: 'Profile & Contour',
+        measurement_notes: 'Describe crown shape and degree of convexity/concavity using the handbook terms.',
+        key_indicators: 'Check for appropriate crown shape; flag obvious over-build or concavity outside expected profile.'
+      },
+      {
+        name: 'Ripple Pattern',
+        measurement_notes: 'Describe ripple spacing uniformity and pattern clarity using handbook guidance.',
+        key_indicators: 'Expect consistent ripple spacing and clarity; flag coarse or irregular patterns.'
+      },
+      {
+        name: 'Heat Control',
+        measurement_notes: 'Estimate HAZ width and undercut presence/length using handbook definitions.',
+        key_indicators: 'Look for minimal undercut and controlled HAZ; flag obvious burn-through or excessive HAZ.'
+      }
     ], []);
 
     const DEFAULT_OBSERVATIONS: RubricObservation[] = useMemo(() => [
       {
         criterion: 'Bead Consistency',
-        observed_condition: 'Detailed observation of width/height/straightness.',
-        matches_reference: 'pass | partial | fail',
-        variance_estimate: 'e.g. 15% width variance'
+        observed_condition: 'Avg bead width ~6.2mm; variance +/-0.8mm (~13%). Path mostly straight.',
+        matches_reference: DEFAULT_STATUS,
+        variance_estimate: '+/-13% width variance'
       },
       {
         criterion: 'Penetration & Fusion',
-        observed_condition: 'Detailed observation of toes and tie-in.',
-        matches_reference: 'pass | partial | fail',
-        variance_estimate: 'e.g. 5% cold lap length'
+        observed_condition: 'Toe tie-in smooth; cold lap noted near start.',
+        matches_reference: DEFAULT_STATUS,
+        variance_estimate: '~4% cold lap length'
       },
       {
         criterion: 'Profile & Contour',
-        observed_condition: 'Detailed observation of crown/flatness.',
-        matches_reference: 'pass | partial | fail',
+        observed_condition: 'Slightly convex crown; profile within expected range.',
+        matches_reference: DEFAULT_STATUS,
         variance_estimate: 'N/A or % deviation'
       },
       {
         criterion: 'Ripple Pattern',
-        observed_condition: 'Detailed observation of ripple spacing.',
-        matches_reference: 'pass | partial | fail',
-        variance_estimate: 'e.g. 25% spacing variance'
+        observed_condition: 'Ripples mostly even; tighter spacing toward end.',
+        matches_reference: DEFAULT_STATUS,
+        variance_estimate: '~12% spacing variance'
       },
       {
         criterion: 'Heat Control',
-        observed_condition: 'Detailed observation of HAZ and undercut.',
-        matches_reference: 'pass | partial | fail',
-        variance_estimate: 'e.g. 8% undercut length'
+        observed_condition: 'Even HAZ width; slight undercut mid-length.',
+        matches_reference: DEFAULT_STATUS,
+        variance_estimate: '~6% undercut length'
       }
-    ], []);
+    ], [DEFAULT_STATUS]);
 
     const DEFAULT_DEFECTS: RubricDefect[] = useMemo(() => ([
       {
@@ -146,36 +177,50 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     };
 
     const parseVisionPrompt = React.useCallback((raw: string | null | undefined): VisionBuilderState => {
+      const mapObservations = (obsList: RubricObservation[]) =>
+        obsList.map((obs) => ({
+          ...obs,
+          matches_reference: normalizeToleranceStatus(obs.matches_reference)
+        }));
+
+      const mapCriteria = (criteria: any[]) =>
+        criteria.map((c) => ({
+          name: c.name,
+          measurement_notes: c.measurement_notes || c.pass_description || '',
+          key_indicators: c.key_indicators || c.fail_description || ''
+        }));
+
       try {
         if (!raw) {
           throw new Error('missing');
         }
         const parsed = JSON.parse(raw);
         return {
-          rubric_criteria: Array.isArray(parsed?.rubric_criteria) && parsed.rubric_criteria.length ? parsed.rubric_criteria : DEFAULT_RUBRIC_CRITERIA,
-          student_observations: Array.isArray(parsed?.student_observations) && parsed.student_observations.length ? parsed.student_observations : DEFAULT_OBSERVATIONS,
+          rubric_criteria: Array.isArray(parsed?.rubric_criteria) && parsed.rubric_criteria.length ? mapCriteria(parsed.rubric_criteria) : DEFAULT_RUBRIC_CRITERIA,
+          student_observations: Array.isArray(parsed?.student_observations) && parsed.student_observations.length ? mapObservations(parsed.student_observations) : mapObservations(DEFAULT_OBSERVATIONS),
           detected_defects: Array.isArray(parsed?.detected_defects) && parsed.detected_defects.length ? parsed.detected_defects : DEFAULT_DEFECTS,
         };
       } catch {
         return {
           rubric_criteria: DEFAULT_RUBRIC_CRITERIA,
-          student_observations: DEFAULT_OBSERVATIONS,
+          student_observations: mapObservations(DEFAULT_OBSERVATIONS),
           detected_defects: DEFAULT_DEFECTS,
         };
       }
-    }, [DEFAULT_DEFECTS, DEFAULT_OBSERVATIONS, DEFAULT_RUBRIC_CRITERIA]);
+    }, [DEFAULT_DEFECTS, DEFAULT_OBSERVATIONS, DEFAULT_RUBRIC_CRITERIA, normalizeToleranceStatus]);
 
     const [visionBuilder, setVisionBuilder] = useState<VisionBuilderState>(() => parseVisionPrompt(settings.visionPrompt ?? null));
     const [showVisionBuilder, setShowVisionBuilder] = useState(false);
-    const [bulkMatchesReference, setBulkMatchesReference] = useState('');
+    const [bulkMatchesReference, setBulkMatchesReference] = useState(DEFAULT_STATUS);
     const [bulkSeverity, setBulkSeverity] = useState('');
 
     const syncVisionBuilderFromSettings = React.useCallback(() => {
       const parsed = parseVisionPrompt(settings.visionPrompt);
       setVisionBuilder(parsed);
-      setBulkMatchesReference(parsed.student_observations?.[0]?.matches_reference || 'pass | partial | fail');
+      const firstStatus = normalizeToleranceStatus(parsed.student_observations?.[0]?.matches_reference);
+      setBulkMatchesReference(firstStatus || DEFAULT_STATUS);
       setBulkSeverity(parsed.detected_defects?.[0]?.severity || '');
-    }, [parseVisionPrompt, settings.visionPrompt]);
+    }, [DEFAULT_STATUS, normalizeToleranceStatus, parseVisionPrompt, settings.visionPrompt]);
 
     React.useEffect(() => {
       syncVisionBuilderFromSettings();
@@ -186,7 +231,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
         rubric_criteria: visionBuilder.rubric_criteria,
         student_observations: visionBuilder.student_observations.map((obs) => ({
           ...obs,
-          matches_reference: obs.matches_reference || 'pass | partial | fail'
+          matches_reference: normalizeToleranceStatus(obs.matches_reference) || DEFAULT_STATUS
         })),
         detected_defects: visionBuilder.detected_defects.map((def) => ({
           ...def,
@@ -536,12 +581,12 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                     {showVisionBuilder && (
                       <div className="space-y-4 mt-3 border border-zinc-800 rounded-xl p-3 bg-zinc-900/50">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Grading Criteria</h4>
+                            <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Measurement Criteria</h4>
                           <button
                             type="button"
                             onClick={() => setVisionBuilder((prev) => ({
                               ...prev,
-                              rubric_criteria: [...prev.rubric_criteria, { name: 'New Criterion', pass_description: '', fail_description: '' }]
+                              rubric_criteria: [...prev.rubric_criteria, { name: 'New Criterion', measurement_notes: '', key_indicators: '' }]
                             }))}
                             className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
                           >
@@ -564,29 +609,29 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                 />
                               </div>
                               <div className="col-span-4 space-y-1">
-                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Pass Criteria</span>
+                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">What to capture</span>
                                 <textarea
-                                  value={crit.pass_description}
+                                  value={crit.measurement_notes || ''}
                                   onChange={(e) => {
                                     const next = [...visionBuilder.rubric_criteria];
-                                    next[idx] = { ...next[idx], pass_description: e.target.value };
+                                    next[idx] = { ...next[idx], measurement_notes: e.target.value };
                                     setVisionBuilder((prev) => ({ ...prev, rubric_criteria: next }));
                                   }}
-                                  placeholder="Pass description"
+                                  placeholder="Key measurements, cues, or dimensions to record"
                                   rows={2}
                                   className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 resize-none"
                                 />
                               </div>
                               <div className="col-span-4 space-y-1">
-                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Fail Criteria</span>
+                                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Indicators / Ranges</span>
                                 <textarea
-                                  value={crit.fail_description}
+                                  value={crit.key_indicators || ''}
                                   onChange={(e) => {
                                     const next = [...visionBuilder.rubric_criteria];
-                                    next[idx] = { ...next[idx], fail_description: e.target.value };
+                                    next[idx] = { ...next[idx], key_indicators: e.target.value };
                                     setVisionBuilder((prev) => ({ ...prev, rubric_criteria: next }));
                                   }}
-                                  placeholder="Fail description"
+                                  placeholder="Targets, tolerances, or notable indicators"
                                   rows={2}
                                   className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 resize-none"
                                 />
@@ -612,12 +657,12 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
 
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Student Observations</h4>
+                            <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Observations & Measurements</h4>
                             <button
                               type="button"
                               onClick={() => setVisionBuilder((prev) => ({
                                 ...prev,
-                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: bulkMatchesReference || 'pass | partial | fail', variance_estimate: '' }]
+                                student_observations: [...prev.student_observations, { criterion: visionBuilder.rubric_criteria[0]?.name || 'New Criterion', observed_condition: '', matches_reference: bulkMatchesReference || DEFAULT_STATUS, variance_estimate: '' }]
                               }))}
                               className="text-xs flex items-center gap-1 text-sky-400 hover:text-sky-300"
                             >
@@ -634,11 +679,11 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                                   ...prev,
                                   student_observations: prev.student_observations.map((obs) => ({
                                     ...obs,
-                                    matches_reference: val || obs.matches_reference || 'pass'
+                                    matches_reference: normalizeToleranceStatus(val || obs.matches_reference)
                                   }))
                                 }));
                               }}
-                              placeholder="matches_reference (pass/partial/fail)"
+                              placeholder="status (e.g., not_evaluated)"
                               className="w-56 bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-zinc-600"
                             />
                           </div>
