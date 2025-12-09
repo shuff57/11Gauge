@@ -221,7 +221,8 @@ The subsequent images are reference examples:`;
   // If a reasoning model is configured, we use the 2-step pipeline.
   // The vision model is hardcoded to qwen3-vl as per requirements.
   const visionModel = "qwen3-vl:235b-instruct-cloud";
-  const usePipeline = Boolean(settings.ollamaReasoningModel);
+  // Pipeline disabled to speed up processing time as per user request
+  const usePipeline = false; // Boolean(settings.ollamaReasoningModel);
 
   const normalizeVisionStatus = (value?: string | null) => {
     const lower = (value || '').toLowerCase().trim();
@@ -512,9 +513,47 @@ Based on the visual analysis above and the provided context, evaluate the weld a
     prompt: promptPrefix,
     images,
     stream: true,
-    think: settings.ollamaThinking ?? true,
-    ragQuery: undefined // Use default prompt for RAG
-  }, onPartial, onThinking, onMetrics, onProgress); // Pass onProgress for RAG notifications
+    think: false, // Vision models like qwen3-vl don't support native "thinking" states
+    // Inject relevant handbook definitions by querying for key rubric terms
+    ragQuery: "welding defects definitions undercut porosity cold lap bead consistency penetration profile"
+  }, (partial) => {
+    // Smart Stream Splitting:
+    // If the output starts with a JSON block (Step 1), divert it to the "Thinking" trace.
+    // Once the JSON block closes, stream the rest to the main result.
+    
+    // Check if we are still in the initial JSON block
+    const jsonBlockEnd = partial.indexOf('```', 4); // Look for closing block (skip first ```json)
+    
+    if (partial.trimStart().startsWith('```json') && jsonBlockEnd === -1) {
+      // We are inside the open JSON block -> Stream to Thinking
+      onThinking?.(`### Visual Analysis (Streaming)\n${partial}`);
+    } else if (partial.trimStart().startsWith('```json') && jsonBlockEnd !== -1) {
+      // JSON block has closed.
+      // 1. Update Thinking with the full JSON block
+      const jsonPart = partial.substring(0, jsonBlockEnd + 3);
+      onThinking?.(`### Visual Analysis (Complete)\n${jsonPart}`);
+      
+      // 2. Stream the rest to Result
+      const rest = partial.substring(jsonBlockEnd + 3).trim();
+      if (rest) {
+        onPartial?.(rest);
+      }
+    } else {
+      // No JSON block detected at start, or we are past it -> Stream everything to Result
+      onPartial?.(partial);
+    }
+  }, onThinking, onMetrics, onProgress); // Pass onProgress for RAG notifications
+
+  // Attempt to extract structured data from the single-pass response to update the UI
+  try {
+    const jsonMatch = response.text.match(/```json\n([\s\S]*?)\n```/);
+    if (jsonMatch && jsonMatch[1] && onStructuredAnalysis) {
+      const data = JSON.parse(jsonMatch[1]);
+      onStructuredAnalysis(data);
+    }
+  } catch (e) {
+    console.warn("Failed to parse structured data from single-pass response", e);
+  }
 
   return response.text;
 };

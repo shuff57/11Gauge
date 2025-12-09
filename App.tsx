@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
+import { ImageCropper } from './components/ImageCropper';
 import { makePromptHumanReadable } from './utils/prompt';
 // Debug panel utility
 const useDebugPanel = () => {
@@ -145,6 +146,7 @@ export default function App() {
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [progressLog, setProgressLog] = useState<string[]>([]);
   const [hasUsedDemo, setHasUsedDemo] = useState(false);
+  const [cropTarget, setCropTarget] = useState<{ url: string; index: number } | null>(null);
 
   // Check demo usage on mount
   useEffect(() => {
@@ -593,6 +595,29 @@ export default function App() {
     }
   };
 
+  const handleCropComplete = (croppedBlob: Blob) => {
+    if (!cropTarget) return;
+    
+    const newFile = new File([croppedBlob], selectedFiles[cropTarget.index].name, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+
+    const newFiles = [...selectedFiles];
+    newFiles[cropTarget.index] = newFile;
+    setSelectedFiles(newFiles);
+
+    const newUrl = URL.createObjectURL(newFile);
+    setPreviewUrls((prev) => {
+      const next = [...prev];
+      URL.revokeObjectURL(next[cropTarget.index]);
+      next[cropTarget.index] = newUrl;
+      return next;
+    });
+
+    setCropTarget(null);
+  };
+
   const handleAnalyze = async () => {
     if (!selectedFiles.length) return;
 
@@ -1019,10 +1044,18 @@ export default function App() {
                     </div>
                   )}
                   {!isAnalyzing && !result && (
-                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-3">
                         <button onClick={handleReset} className="px-4 py-2 bg-black/50 backdrop-blur text-white text-sm rounded-full border border-white/10 hover:bg-black/70">
                           Change Media
                         </button>
+                        {mediaKind === 'image' && (
+                          <button 
+                            onClick={() => setCropTarget({ url: primaryPreviewUrl!, index: activeIndex })}
+                            className="px-4 py-2 bg-blue-600/80 backdrop-blur text-white text-sm rounded-full border border-white/10 hover:bg-blue-600"
+                          >
+                            Crop / Focus
+                          </button>
+                        )}
                      </div>
                   )}
                 </div>
@@ -1142,6 +1175,14 @@ export default function App() {
         capture="environment"
         onChange={handleCameraCapture}
       />
+      
+      {cropTarget && (
+        <ImageCropper
+          imageUrl={cropTarget.url}
+          onCrop={handleCropComplete}
+          onCancel={() => setCropTarget(null)}
+        />
+      )}
       </div>
     </div>
   );
