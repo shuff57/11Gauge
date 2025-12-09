@@ -126,11 +126,15 @@ export default function App() {
       return [];
     }
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const primaryFile = selectedFiles[activeIndex] || null;
+  const primaryPreviewUrl = previewUrls[activeIndex] || null;
+  const hasSelection = selectedFiles.length > 0;
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [reasoningTrace, setReasoningTrace] = useState<string | null>(null);
@@ -469,23 +473,45 @@ export default function App() {
   }, [user]);
 
   // Handlers
-  const prepareSelectedFile = (file: File) => {
-    const type = (file.type || '').toLowerCase();
-    const nextKind = type.startsWith('video/') ? 'video' : type.startsWith('image/') ? 'image' : null;
+  const prepareSelectedFiles = (files: File[]) => {
+    const list = files.filter(Boolean);
+    if (!list.length) return;
 
-    if (!nextKind) {
+    const detectKind = (file: File): 'image' | 'video' | null => {
+      const type = (file.type || '').toLowerCase();
+      if (type.startsWith('video/')) return 'video';
+      if (type.startsWith('image/')) return 'image';
+      return null;
+    };
+
+    const kinds = list.map(detectKind);
+    const primaryKind = kinds[0];
+
+    if (!primaryKind) {
       setError('Please choose an image or video file.');
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
+    const mixedKinds = kinds.some((k) => k !== primaryKind);
+    if (mixedKinds) {
+      setError('Please upload either images or a single video at a time.');
+      return;
+    }
 
-    setSelectedFile(file);
-    setMediaKind(nextKind);
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return objectUrl;
+    if (primaryKind === 'video' && list.length > 1) {
+      setError('Only one video can be analyzed at a time.');
+      return;
+    }
+
+    setSelectedFiles(list);
+    // Build preview URLs for each selected file
+    const urls = list.map((file) => URL.createObjectURL(file));
+    setPreviewUrls((prev) => {
+      prev.forEach((url) => URL.revokeObjectURL(url));
+      return urls;
     });
+    setActiveIndex(0);
+    setMediaKind(primaryKind);
     setResult(null);
     setReasoningTrace(null);
     setStructuredAnalysis(null);
@@ -496,9 +522,9 @@ export default function App() {
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      prepareSelectedFile(file);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length) {
+      prepareSelectedFiles(files);
     }
     e.target.value = '';
   };
@@ -506,15 +532,19 @@ export default function App() {
   const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      prepareSelectedFile(file);
+      prepareSelectedFiles([file]);
     }
     e.target.value = '';
   };
 
   const handleReset = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setMediaKind(null);
-    setPreviewUrl(null);
+    setPreviewUrls((prev) => {
+      prev.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+    setActiveIndex(0);
     setResult(null);
     setReasoningTrace(null);
     setStructuredAnalysis(null);
@@ -522,12 +552,10 @@ export default function App() {
     setError(undefined);
     setAnalysisProgress(null);
     setProgressLog([]);
-    // Revoke URL to prevent memory leaks
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
   };
 
   const handleAnalyze = async () => {
-    if (!selectedFile) return;
+    if (!selectedFiles.length) return;
 
     // Check for demo usage limit if signed out
     if (!user) {
@@ -590,7 +618,7 @@ export default function App() {
         }
       }
       
-      const text = await analyzeMedia(selectedFile, effectiveSettings, {
+      const text = await analyzeMedia(selectedFiles, effectiveSettings, {
         referenceImages: selectedReferences,
         onProgress: (progress) => {
           setAnalysisProgress(progress);
@@ -810,12 +838,12 @@ export default function App() {
             </Suspense>
           )}
 
-          {user && isAdminUser && selectedFile && (
+          {user && isAdminUser && primaryFile && (
             <Suspense fallback={null}>
               <SaveReferenceModal
                 isOpen={isSaveReferenceModalOpen}
                 onClose={() => setIsSaveReferenceModalOpen(false)}
-                file={selectedFile}
+                file={primaryFile}
                 initialDescription={result || undefined}
                 settings={settings}
                 structuredAnalysis={structuredAnalysis}
@@ -846,7 +874,7 @@ export default function App() {
         <div className="mx-[5vw] min-h-full flex flex-col p-2 sm:p-6">
           
           {/* Empty State / Logo with overlay inputs */}
-          {!selectedFile && (
+          {!hasSelection && (
             <div className="flex-1 flex flex-col gap-4 w-full text-zinc-600">
               <div className="flex-1 flex flex-col items-center justify-center text-center">
                 <h1 className="text-xl font-medium text-white mb-2">Ready to Analyze</h1>
@@ -854,6 +882,25 @@ export default function App() {
                   Upload a photo, drop in a short video, or open your camera to capture something new with {MODEL_LABELS[settings.provider]}.
                 </p>
               </div>
+
+              {/* Thumbnail grid for multiple photos */}
+              {mediaKind === 'image' && previewUrls.length > 1 && (
+                <div className="flex flex-wrap gap-2 justify-center px-1">
+                  {previewUrls.map((url, idx) => (
+                    <button
+                      key={url}
+                      onClick={() => setActiveIndex(idx)}
+                      className={`relative w-20 h-20 rounded-lg overflow-hidden border transition-all ${idx === activeIndex ? 'border-white shadow-[0_0_0_2px_rgba(255,255,255,0.25)]' : 'border-zinc-800 hover:border-zinc-600'}`}
+                      aria-label={`Select photo ${idx + 1}`}
+                    >
+                      <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                      {idx === activeIndex && (
+                        <span className="absolute inset-0 ring-2 ring-white/60 pointer-events-none" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
               
               {!user && hasUsedDemo ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-6">
@@ -888,14 +935,14 @@ export default function App() {
           )}
 
           {/* Preview & Results */}
-          {selectedFile && (
+          {hasSelection && (
             <div className="flex-1 flex flex-col gap-8 pb-32">
               {/* Image Preview */}
               <div className="w-full flex justify-center animate-in zoom-in-95 duration-300">
                 <div className="relative group rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl max-h-[50vh] bg-black">
                   {mediaKind === 'video' ? (
                     <video
-                      src={previewUrl ?? undefined}
+                      src={primaryPreviewUrl ?? undefined}
                       controls
                       playsInline
                       loop={!isAnalyzing && !result}
@@ -903,14 +950,14 @@ export default function App() {
                     />
                   ) : (
                     <img 
-                      src={previewUrl!} 
+                      src={primaryPreviewUrl ?? undefined} 
                       alt="Preview" 
                       className="w-full h-full object-contain max-h-[50vh]"
                     />
                   )}
                   {mediaKind && (
                     <span className="absolute top-3 left-3 px-3 py-1 text-xs font-semibold rounded-full bg-black/70 text-white uppercase tracking-widest">
-                      {mediaKind === 'video' ? 'Video Clip' : 'Photo'}
+                      {mediaKind === 'video' ? 'Video Clip' : selectedFiles.length > 1 ? `Photos (${selectedFiles.length})` : 'Photo'}
                     </span>
                   )}
                   {!isAnalyzing && !result && (
@@ -978,7 +1025,7 @@ export default function App() {
         <div className="max-w-2xl mx-auto">
           {/* Input cards now occupy the lower half of the viewport via the main overlay */}
 
-          {selectedFile && !result && !isAnalyzing && (
+          {hasSelection && !result && !isAnalyzing && (
             /* Analyze Action State */
             <button 
               onClick={() => setIsSetupModalOpen(true)}
@@ -1026,6 +1073,7 @@ export default function App() {
         ref={fileInputRef}
         className="hidden" 
         accept="image/*,video/*"
+        multiple
         onChange={handleFileInputChange}
       />
       <input 

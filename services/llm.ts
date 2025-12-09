@@ -16,6 +16,13 @@ const MOTION_SAMPLE_WIDTH = 96;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const detectMediaKind = (file: File): 'image' | 'video' | null => {
+  const mimeType = file.type || '';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  return null;
+};
+
 type ProgressCallback = (progress: AnalysisProgress) => void;
 interface AnalyzeMediaOptions {
   onProgress?: ProgressCallback;
@@ -36,12 +43,35 @@ const finalizeWithProgress = async (
 };
 
 export const analyzeMedia = async (
-  file: File,
+  fileOrFiles: File | File[],
   settings: AppSettings,
   options?: AnalyzeMediaOptions
 ): Promise<string> => {
+  const files = Array.isArray(fileOrFiles)
+    ? fileOrFiles.filter((f): f is File => Boolean(f))
+    : [fileOrFiles];
+  if (!files.length) {
+    throw new Error('Please select an image or video to analyze.');
+  }
+
+  const kinds = files.map(detectMediaKind);
+  const primaryKind = kinds[0];
+
+  if (!primaryKind) {
+    throw new Error('Only image or video uploads are supported.');
+  }
+
+  const mixedKinds = kinds.some((k) => k !== primaryKind);
+  if (mixedKinds) {
+    throw new Error('Please upload either images or a single video at a time.');
+  }
+
+  if (primaryKind === 'video' && files.length > 1) {
+    throw new Error('Only one video can be analyzed at a time.');
+  }
+
   options?.onProgress?.({ phase: 'preparing-media', message: 'Preparing upload...' });
-  const payload = await buildMediaPayload(file, options?.onProgress);
+  const payload = await buildMediaPayload(files, options?.onProgress);
   options?.onProgress?.({ phase: 'awaiting-model', message: 'Sending media to model...' });
 
   if (settings.provider !== ModelProvider.OLLAMA) {
@@ -615,6 +645,14 @@ const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
 
   const apiKey = settings.ollamaKey?.trim() || process.env.OLLAMA_API_KEY || '';
 
+  const maskedKey = apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-2)}` : '(none)';
+  console.log('[TestConnection] Sending Ollama test', {
+    url: configuredUrl || '(backend default)',
+    model: getOllamaModel(settings),
+    keyProvided: Boolean(apiKey),
+    keyPreview: maskedKey
+  });
+
   const response = await fetch(`/api/ollama/test`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -630,33 +668,57 @@ const testOllamaConnection = async (settings: AppSettings): Promise<void> => {
     console.error("Ollama Test Failed:", { status: response.status, data });
     throw new Error(data?.error || `Connection failed (${response.status}). Check your API key and URL.`);
   }
+
+  console.log('[TestConnection] Ollama test succeeded');
 };
 
 const buildMediaPayload = async (
-  file: File,
+  files: File[],
   onProgress?: ProgressCallback
 ): Promise<MediaPayload> => {
-  const mimeType = file.type || '';
-  const isImage = mimeType.startsWith('image/');
-  const isVideo = mimeType.startsWith('video/');
+  const list = files.filter((f): f is File => Boolean(f));
+  const primary = list[0];
 
-  if (!isImage && !isVideo) {
+  if (!primary) {
+    throw new Error('No media provided.');
+  }
+
+  const primaryKind = detectMediaKind(primary);
+
+  if (!primaryKind) {
     throw new Error('Only image or video uploads are supported.');
   }
 
-  if (isVideo) {
-    if (file.size > VIDEO_UPLOAD_LIMITS.maxFileBytes) {
+  if (primaryKind === 'video') {
+    if (list.length > 1) {
+      throw new Error('Only one video can be analyzed at a time.');
+    }
+    if (primary.size > VIDEO_UPLOAD_LIMITS.maxFileBytes) {
       const maxMb = Math.floor(VIDEO_UPLOAD_LIMITS.maxFileBytes / (1024 * 1024));
       throw new Error(`Video files must be smaller than ${maxMb}MB.`);
     }
     onProgress?.({ phase: 'processing-video', message: 'Extracting frames...' });
-    return extractVideoPayload(file, onProgress);
+    return extractVideoPayload(primary, onProgress);
   }
 
-  const dataUrl = await fileToBase64(file);
-  onProgress?.({ phase: 'preparing-media', message: 'Image ready for analysis.' });
+  const frames: MediaPayload['frames'] = [];
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    if (detectMediaKind(file) !== 'image') {
+      throw new Error('Please upload only images when attaching multiple files.');
+    }
+    const mimeType = file.type || 'image/jpeg';
+    const dataUrl = await fileToBase64(file);
+    frames.push({ dataUrl, mimeType, timestampSeconds: i });
+    if (list.length > 1) {
+      onProgress?.({ phase: 'preparing-media', message: `Attaching image ${i + 1}/${list.length}...` });
+    }
+  }
+
+  onProgress?.({ phase: 'preparing-media', message: list.length > 1 ? `${list.length} images ready for analysis.` : 'Image ready for analysis.' });
+
   return {
-    frames: [{ dataUrl, mimeType: mimeType || 'image/jpeg', timestampSeconds: 0 }],
+    frames,
     kind: 'image'
   };
 };
