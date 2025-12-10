@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/pages-KP9FX4/functionsWorker-0.5836253776814699.mjs
+// .wrangler/tmp/pages-NZ8Z7D/functionsWorker-0.13670877561472938.mjs
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var SESSION_COOKIE_NAME = "11g_session";
@@ -440,6 +440,115 @@ var onRequest3 = /* @__PURE__ */ __name2(async ({ request, env, params }) => {
     });
   }
 }, "onRequest");
+var parseBBox = /* @__PURE__ */ __name2((text) => {
+  if (!text) return null;
+  const match2 = text.match(/\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]/);
+  if (!match2) return null;
+  const [, ymin, xmin, ymax, xmax] = match2.map(Number);
+  return [ymin, xmin, ymax, xmax];
+}, "parseBBox");
+var makeRectanglePolygon = /* @__PURE__ */ __name2(([ymin, xmin, ymax, xmax]) => [
+  { x: xmin, y: ymin },
+  { x: xmax, y: ymin },
+  { x: xmax, y: ymax },
+  { x: xmin, y: ymax }
+], "makeRectanglePolygon");
+var onRequestPost = /* @__PURE__ */ __name2(async ({ request, env }) => {
+  try {
+    const formData = await request.formData();
+    const file = formData.get("image");
+    const mode = formData.get("mode") || "bbox";
+    const requestedModel = formData.get("model")?.trim();
+    const modelOrder = [
+      requestedModel,
+      env.AI_MODEL,
+      "qwen3-vl:235b-instruct-cloud",
+      "@cf/llava-hf/llava-1.6-mistral-7b",
+      "@cf/llava-hf/llava-1.5-7b-hf",
+      "@cf/microsoft/phi-3.5-vision-instruct"
+    ].filter(Boolean);
+    if (!file) {
+      return new Response("No image provided", { status: 400 });
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const imageArray = Array.from(uint8Array);
+    const bboxPrompt = "Locate ONLY the weld bead and its immediate HAZ. Exclude background, table, and unused plate. Return a tight bounding box as [ymin, xmin, ymax, xmax] (0-1000). Only return the numbers.";
+    let bbox = null;
+    let description = "";
+    if (env.AI) {
+      for (const model of modelOrder) {
+        try {
+          const detection = await env.AI.run(model, { image: imageArray, prompt: bboxPrompt });
+          description = detection?.description || JSON.stringify(detection);
+          bbox = parseBBox(description);
+          if (bbox) break;
+        } catch (e) {
+        }
+      }
+    }
+    if (!bbox) {
+      bbox = [0, 0, 1e3, 1e3];
+      description = description || "fallback-full-image";
+    }
+    const tightenLooseBox = /* @__PURE__ */ __name2(([ymin, xmin, ymax, xmax]) => {
+      const width = xmax - xmin;
+      const height = ymax - ymin;
+      const tooWide = width > 700;
+      const tooTall = height > 700;
+      if (!tooWide && !tooTall) return [ymin, xmin, ymax, xmax];
+      const shrinkX = width * 0.2;
+      const shrinkY = height * 0.2;
+      const nxmin = Math.max(0, xmin + shrinkX);
+      const nxmax = Math.min(1e3, xmax - shrinkX);
+      const nymin = Math.max(0, ymin + shrinkY);
+      const nymax = Math.min(1e3, ymax - shrinkY);
+      return [nymin, nxmin, nymax, nxmax];
+    }, "tightenLooseBox");
+    bbox = tightenLooseBox(bbox);
+    const result = {
+      bbox,
+      description
+    };
+    if (mode === "segmentation") {
+      try {
+        const segPrompt = "Trace the weld bead outline. Return polygon points as [[x1,y1],[x2,y2],...,[xn,yn]] with values 0-1000. Keep points minimal (<=18).";
+        const segModelOrder = [requestedModel, env.AI_MODEL, "qwen3-vl:235b-instruct-cloud", "@cf/llava-hf/llava-1.6-mistral-7b", "@cf/llava-hf/llava-1.5-7b-hf", "@cf/microsoft/phi-3.5-vision-instruct"].filter(Boolean);
+        for (const segModel of segModelOrder) {
+          try {
+            const seg = await env.AI.run(segModel, {
+              image: imageArray,
+              prompt: segPrompt
+            });
+            const segText = seg?.description || JSON.stringify(seg);
+            const polyMatch = segText.match(/\[\s*\[(.*?)\]\s*\]/);
+            if (polyMatch) {
+              const arr = JSON.parse(`[${polyMatch[1]}]`);
+              const polygon = Array.isArray(arr) ? arr.map((p) => ({ x: Number(p[0]), y: Number(p[1]) })).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)) : [];
+              if (polygon.length >= 3) {
+                result.polygon = polygon;
+                break;
+              }
+            }
+          } catch (_) {
+          }
+        }
+      } catch (_) {
+      }
+      if (!result.polygon) {
+        result.polygon = makeRectanglePolygon(bbox);
+      }
+    }
+    if (!result.polygon) {
+      result.polygon = makeRectanglePolygon(bbox);
+    }
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+}, "onRequestPost");
 var parseAdminEmails = /* @__PURE__ */ __name2((raw) => {
   if (!raw) return [];
   return raw.split(/[,\n;]/).map((value) => value.trim().toLowerCase()).filter(Boolean);
@@ -1828,6 +1937,13 @@ var routes = [
     modules: [onRequest3]
   },
   {
+    routePath: "/api/ai/detect-weld",
+    mountPath: "/api/ai",
+    method: "POST",
+    middlewares: [],
+    modules: [onRequestPost]
+  },
+  {
     routePath: "/api/admin/prompts",
     mountPath: "/api/admin",
     method: "",
@@ -2605,7 +2721,7 @@ var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default2 = jsonError2;
 
-// .wrangler/tmp/bundle-Y3mYHp/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-MddAvt/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__2 = [
   middleware_ensure_req_body_drained_default2,
   middleware_miniflare3_json_error_default2
@@ -2637,7 +2753,7 @@ function __facade_invoke__2(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__2, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-Y3mYHp/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-MddAvt/middleware-loader.entry.ts
 var __Facade_ScheduledController__2 = class ___Facade_ScheduledController__2 {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -2737,4 +2853,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__2 as __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default2 as default
 };
-//# sourceMappingURL=functionsWorker-0.5836253776814699.js.map
+//# sourceMappingURL=functionsWorker-0.13670877561472938.js.map

@@ -1,6 +1,7 @@
 import { onRequest as __api_auth_google_callback_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\auth\\google\\callback.ts"
 import { onRequest as __api_examples__id__image_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\examples\\[id]\\image.ts"
 import { onRequest as __api_sources__id__chunks_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\sources\\[id]\\chunks.ts"
+import { onRequestPost as __api_ai_detect_weld_ts_onRequestPost } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\ai\\detect-weld.ts"
 import { onRequest as __api_admin_prompts_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\admin\\prompts.ts"
 import { onRequest as __api_admin_users_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\admin\\users.ts"
 import { onRequest as __api_auth_google_ts_onRequest } from "C:\\Users\\shuff\\OneDrive\\Documents\\GitHub\\11Gauge\\functions\\api\\auth\\google.ts"
@@ -39,6 +40,13 @@ export const routes = [
       method: "",
       middlewares: [],
       modules: [__api_sources__id__chunks_ts_onRequest],
+    },
+  {
+      routePath: "/api/ai/detect-weld",
+      mountPath: "/api/ai",
+      method: "POST",
+      middlewares: [],
+      modules: [__api_ai_detect_weld_ts_onRequestPost],
     },
   {
       routePath: "/api/admin/prompts",

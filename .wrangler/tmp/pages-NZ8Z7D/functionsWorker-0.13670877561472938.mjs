@@ -449,6 +449,117 @@ var onRequest3 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   }
 }, "onRequest");
 
+// api/ai/detect-weld.ts
+var parseBBox = /* @__PURE__ */ __name((text) => {
+  if (!text) return null;
+  const match2 = text.match(/\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]/);
+  if (!match2) return null;
+  const [, ymin, xmin, ymax, xmax] = match2.map(Number);
+  return [ymin, xmin, ymax, xmax];
+}, "parseBBox");
+var makeRectanglePolygon = /* @__PURE__ */ __name(([ymin, xmin, ymax, xmax]) => [
+  { x: xmin, y: ymin },
+  { x: xmax, y: ymin },
+  { x: xmax, y: ymax },
+  { x: xmin, y: ymax }
+], "makeRectanglePolygon");
+var onRequestPost = /* @__PURE__ */ __name(async ({ request, env }) => {
+  try {
+    const formData = await request.formData();
+    const file = formData.get("image");
+    const mode = formData.get("mode") || "bbox";
+    const requestedModel = formData.get("model")?.trim();
+    const modelOrder = [
+      requestedModel,
+      env.AI_MODEL,
+      "qwen3-vl:235b-instruct-cloud",
+      "@cf/llava-hf/llava-1.6-mistral-7b",
+      "@cf/llava-hf/llava-1.5-7b-hf",
+      "@cf/microsoft/phi-3.5-vision-instruct"
+    ].filter(Boolean);
+    if (!file) {
+      return new Response("No image provided", { status: 400 });
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const imageArray = Array.from(uint8Array);
+    const bboxPrompt = "Locate ONLY the weld bead and its immediate HAZ. Exclude background, table, and unused plate. Return a tight bounding box as [ymin, xmin, ymax, xmax] (0-1000). Only return the numbers.";
+    let bbox = null;
+    let description = "";
+    if (env.AI) {
+      for (const model of modelOrder) {
+        try {
+          const detection = await env.AI.run(model, { image: imageArray, prompt: bboxPrompt });
+          description = detection?.description || JSON.stringify(detection);
+          bbox = parseBBox(description);
+          if (bbox) break;
+        } catch (e) {
+        }
+      }
+    }
+    if (!bbox) {
+      bbox = [0, 0, 1e3, 1e3];
+      description = description || "fallback-full-image";
+    }
+    const tightenLooseBox = /* @__PURE__ */ __name(([ymin, xmin, ymax, xmax]) => {
+      const width = xmax - xmin;
+      const height = ymax - ymin;
+      const tooWide = width > 700;
+      const tooTall = height > 700;
+      if (!tooWide && !tooTall) return [ymin, xmin, ymax, xmax];
+      const shrinkX = width * 0.2;
+      const shrinkY = height * 0.2;
+      const nxmin = Math.max(0, xmin + shrinkX);
+      const nxmax = Math.min(1e3, xmax - shrinkX);
+      const nymin = Math.max(0, ymin + shrinkY);
+      const nymax = Math.min(1e3, ymax - shrinkY);
+      return [nymin, nxmin, nymax, nxmax];
+    }, "tightenLooseBox");
+    bbox = tightenLooseBox(bbox);
+    const result = {
+      bbox,
+      description
+    };
+    if (mode === "segmentation") {
+      try {
+        const segPrompt = "Trace the weld bead outline. Return polygon points as [[x1,y1],[x2,y2],...,[xn,yn]] with values 0-1000. Keep points minimal (<=18).";
+        const segModelOrder = [requestedModel, env.AI_MODEL, "qwen3-vl:235b-instruct-cloud", "@cf/llava-hf/llava-1.6-mistral-7b", "@cf/llava-hf/llava-1.5-7b-hf", "@cf/microsoft/phi-3.5-vision-instruct"].filter(Boolean);
+        for (const segModel of segModelOrder) {
+          try {
+            const seg = await env.AI.run(segModel, {
+              image: imageArray,
+              prompt: segPrompt
+            });
+            const segText = seg?.description || JSON.stringify(seg);
+            const polyMatch = segText.match(/\[\s*\[(.*?)\]\s*\]/);
+            if (polyMatch) {
+              const arr = JSON.parse(`[${polyMatch[1]}]`);
+              const polygon = Array.isArray(arr) ? arr.map((p) => ({ x: Number(p[0]), y: Number(p[1]) })).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)) : [];
+              if (polygon.length >= 3) {
+                result.polygon = polygon;
+                break;
+              }
+            }
+          } catch (_) {
+          }
+        }
+      } catch (_) {
+      }
+      if (!result.polygon) {
+        result.polygon = makeRectanglePolygon(bbox);
+      }
+    }
+    if (!result.polygon) {
+      result.polygon = makeRectanglePolygon(bbox);
+    }
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+}, "onRequestPost");
+
 // utils/admin.ts
 var parseAdminEmails = /* @__PURE__ */ __name((raw) => {
   if (!raw) return [];
@@ -1852,7 +1963,7 @@ var onRequest19 = /* @__PURE__ */ __name(async ({ env }) => {
   );
 }, "onRequest");
 
-// ../.wrangler/tmp/pages-KP9FX4/functionsRoutes-0.8068233311726727.mjs
+// ../.wrangler/tmp/pages-NZ8Z7D/functionsRoutes-0.5931655275384666.mjs
 var routes = [
   {
     routePath: "/api/auth/google/callback",
@@ -1874,6 +1985,13 @@ var routes = [
     method: "",
     middlewares: [],
     modules: [onRequest3]
+  },
+  {
+    routePath: "/api/ai/detect-weld",
+    mountPath: "/api/ai",
+    method: "POST",
+    middlewares: [],
+    modules: [onRequestPost]
   },
   {
     routePath: "/api/admin/prompts",
@@ -2476,7 +2594,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-uHEh8n/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-5iqBlt/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2508,7 +2626,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-uHEh8n/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-5iqBlt/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -2608,4 +2726,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default as default
 };
-//# sourceMappingURL=functionsWorker-0.5836253776814699.mjs.map
+//# sourceMappingURL=functionsWorker-0.13670877561472938.mjs.map

@@ -10,12 +10,13 @@ OLLAMA_URL = "https://ollama.com/api"
 OLLAMA_MODEL = "qwen3-vl:235b-instruct-cloud"
 ADMIN_EMAILS = "shuff57@gmail.com"
 
-
-
 # --- Secrets (Add these in Cloudflare Dashboard > Settings > Environment Variables) ---
 # GOOGLE_CLIENT_SECRET = "..."
 # OLLAMA_API_KEY = "..."
 # OLLAMA_KEY_SECRET = "..."
+
+[ai]
+binding = "AI"
 
 [[d1_databases]]
 binding = "USERS_DB"
@@ -31,6 +32,3 @@ database_id = "fedecc09-ebc1-4655-8a05-d19f51e3988a"
 binding = "PRIMARY_SOURCES"
 bucket_name = "11gauge-primary-sources"
 preview_bucket_name = "11gauge-primary-sources-dev"
-
-[ai]
-binding = "AI"

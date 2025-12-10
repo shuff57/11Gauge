@@ -10,6 +10,7 @@ OLLAMA_KEY_SECRET=your-long-random-secret
 OLLAMA_API_KEY="your-ollama-cloud-key"
 OLLAMA_URL=https://ollama.com/api
 OLLAMA_MODEL="qwen3-vl:235b-instruct-cloud"
+GEMINI_API_KEY="your-gemini-key"
 
 # Comma-separated admin emails
 ADMIN_EMAILS="admin@example.com"

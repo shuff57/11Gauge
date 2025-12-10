@@ -23,6 +23,20 @@ const detectMediaKind = (file: File): 'image' | 'video' | null => {
   return null;
 };
 
+const resolveGeminiKey = (apiKey?: string) => {
+  // Clean common copy/paste patterns like GEMINI_API_KEY=... and quoted values
+  const raw = (apiKey || process.env.GEMINI_API_KEY || '').trim();
+  const withoutPrefix = raw.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+  const unquoted = withoutPrefix.replace(/^['"](.+)['"]$/, '$1');
+  const key = unquoted.trim();
+  if (!key) {
+    throw new Error('Please add a Gemini API key in Settings.');
+  }
+  return key;
+};
+
+const isGeminiLiveModel = (modelId: string) => /-live\b/i.test(modelId || '');
+
 type ProgressCallback = (progress: AnalysisProgress) => void;
 interface AnalyzeMediaOptions {
   onProgress?: ProgressCallback;
@@ -40,6 +54,216 @@ const finalizeWithProgress = async (
   const result = await runner();
   onProgress?.({ phase: 'receiving-response', message: 'Formatting insights...' });
   return result;
+};
+
+const analyzeWithGeminiLive = async (
+  payload: MediaPayload,
+  settings: AppSettings,
+  onProgress?: ProgressCallback,
+  onThinking?: (text: string) => void
+): Promise<string> => {
+  const apiKey = resolveGeminiKey(settings.geminiKey);
+  const modelId = settings.geminiModel || 'gemini-2.5-flash-live';
+
+  if (!payload.frames.length) {
+    throw new Error('No visual data found to analyze.');
+  }
+
+  const first = payload.frames[0];
+  const base64 = first.dataUrl.includes(',') ? first.dataUrl.split(',')[1] : first.dataUrl;
+  if (!base64) {
+    throw new Error('Unable to read image data.');
+  }
+
+  onProgress?.({ phase: 'awaiting-model', message: `Connecting to Gemini Live (${modelId})...` });
+
+  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
+  const wsUrl = `wss://generativelanguage.googleapis.com/v1beta/live:connect?key=${encodeURIComponent(apiKey)}`;
+
+  return await new Promise<string>((resolve, reject) => {
+    let accumulated = '';
+    let closed = false;
+
+    const fail = (err: any) => {
+      if (closed) return;
+      closed = true;
+      reject(err instanceof Error ? err : new Error(String(err || 'Gemini Live connection failed.')));
+    };
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (err) {
+      return fail(err);
+    }
+
+    ws.onopen = () => {
+      const setupMessage = {
+        model: `models/${modelId}`,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        // Single-turn input with inline image and prompt
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { data: base64, mimeType: first.mimeType || 'image/jpeg' } },
+              { text: 'Analyze using the provided system prompt.' }
+            ]
+          }
+        ]
+      };
+
+      try {
+        ws.send(JSON.stringify(setupMessage));
+      } catch (err) {
+        fail(err);
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data as string);
+        const chunkText = msg?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join(' ');
+        if (chunkText) {
+          accumulated += chunkText;
+          onThinking?.(accumulated);
+        }
+
+        const finishReason = msg?.candidates?.[0]?.finishReason || msg?.done || msg?.status === 'completed';
+        if (finishReason && !closed) {
+          closed = true;
+          ws.close();
+          resolve(accumulated.trim() || '');
+        }
+      } catch (err) {
+        // Ignore malformed fragments, keep streaming
+      }
+    };
+
+    ws.onerror = (event) => {
+      fail(new Error('Gemini Live connection error.'));
+    };
+
+    ws.onclose = () => {
+      if (closed) return;
+      closed = true;
+      if (accumulated.trim()) {
+        resolve(accumulated.trim());
+      } else {
+        reject(new Error('Gemini Live connection closed without response.'));
+      }
+    };
+  });
+};
+
+const analyzeWithGemini = async (
+  payload: MediaPayload,
+  settings: AppSettings,
+  onProgress?: ProgressCallback,
+  onThinking?: (text: string) => void
+): Promise<string> => {
+  const apiKey = resolveGeminiKey(settings.geminiKey);
+  const modelId = settings.geminiModel || 'gemini-2.5-flash';
+
+  if (modelId.toLowerCase().startsWith('gemma')) {
+    throw new Error('Gemma models are text-only and not supported via this Gemini endpoint. Please choose a Gemini vision-capable model.');
+  }
+
+  if (isGeminiLiveModel(modelId)) {
+    return analyzeWithGeminiLive(payload, settings, onProgress, onThinking);
+  }
+
+  if (!payload.frames.length) {
+    throw new Error('No visual data found to analyze.');
+  }
+
+  // Use the first frame for now; Gemini handles multiple images but we keep it simple.
+  const first = payload.frames[0];
+  const base64 = first.dataUrl.includes(',') ? first.dataUrl.split(',')[1] : first.dataUrl;
+  if (!base64) {
+    throw new Error('Unable to read image data.');
+  }
+
+  onProgress?.({ phase: 'awaiting-model', message: `Sending to Gemini (${modelId})...` });
+
+  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: systemPrompt },
+          { inlineData: { data: base64, mimeType: first.mimeType || 'image/jpeg' } }
+        ]
+      }
+    ]
+  };
+
+  // Prefer streaming endpoint so we can surface thinking/partials
+  const streamUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:streamGenerateContent?key=${encodeURIComponent(apiKey)}`;
+  const streamResp = await fetch(streamUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!streamResp.ok) {
+    const errText = await streamResp.text().catch(() => '');
+    throw new Error(`Gemini request failed: ${streamResp.status} ${streamResp.statusText} ${errText}`.trim());
+  }
+
+  let accumulated = '';
+  if (streamResp.body && 'getReader' in streamResp.body) {
+    const reader = streamResp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const payloadStr = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
+        if (!payloadStr || payloadStr === '[DONE]') continue;
+        try {
+          const json = JSON.parse(payloadStr);
+          const chunkText = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join(' ');
+          if (chunkText) {
+            accumulated += chunkText;
+            onThinking?.(accumulated);
+          }
+        } catch (e) {
+          // ignore JSON parse issues on partial lines
+        }
+      }
+    }
+    if (accumulated.trim()) {
+      onThinking?.(accumulated.trim());
+      return accumulated.trim();
+    }
+  }
+
+  // Fallback to non-streaming if body not readable
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`Gemini request failed: ${resp.status} ${resp.statusText} ${errText}`.trim());
+  }
+
+  const json = await resp.json() as any;
+  const text = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join(' ').trim();
+  if (text) {
+    onThinking?.(text);
+    return text;
+  }
+  return 'No response returned from Gemini.';
 };
 
 export const analyzeMedia = async (
@@ -74,32 +298,41 @@ export const analyzeMedia = async (
   const payload = await buildMediaPayload(files, options?.onProgress);
   options?.onProgress?.({ phase: 'awaiting-model', message: 'Sending media to model...' });
 
-  if (settings.provider !== ModelProvider.OLLAMA) {
-    throw new Error("Only the Ollama provider is supported.");
+  if (settings.provider === ModelProvider.OLLAMA) {
+    return finalizeWithProgress(
+      () =>
+        analyzeWithOllama(
+          payload,
+          settings,
+          options?.onPartialResponse,
+          options?.onThinking,
+          options?.onMetrics,
+          options?.onProgress,
+          options?.referenceImages,
+          options?.onStructuredAnalysis
+        ),
+      options?.onProgress
+    );
   }
 
-  return finalizeWithProgress(
-    () =>
-      analyzeWithOllama(
-        payload,
-        settings,
-        options?.onPartialResponse,
-        options?.onThinking,
-        options?.onMetrics,
-        options?.onProgress,
-        options?.referenceImages,
-        options?.onStructuredAnalysis
-      ),
-    options?.onProgress
-  );
+  if (settings.provider === ModelProvider.GEMINI) {
+    return finalizeWithProgress(
+      () => analyzeWithGemini(payload, settings, options?.onProgress, options?.onThinking),
+      options?.onProgress
+    );
+  }
+
+  throw new Error("Selected provider is not supported yet.");
 };
 
 export const testConnection = async (settings: AppSettings): Promise<void> => {
-  if (settings.provider !== ModelProvider.OLLAMA) {
-    throw new Error("Only the Ollama provider is supported.");
+  if (settings.provider === ModelProvider.OLLAMA) {
+    return testOllamaConnection(settings);
   }
-
-  return testOllamaConnection(settings);
+  if (settings.provider === ModelProvider.GEMINI) {
+    return testGeminiConnection(settings);
+  }
+  throw new Error("Selected provider is not supported yet.");
 };
 
 export const saveOllamaKey = async (key?: string): Promise<boolean> => {
@@ -138,6 +371,69 @@ export const getOllamaKey = async (): Promise<string | null> => {
 
 const getOllamaModel = (settings: AppSettings) => {
   return settings.ollamaModel?.trim() || process.env.OLLAMA_MODEL || "qwen3-vl:235b-instruct-cloud";
+};
+
+const testGeminiConnection = async (settings: AppSettings): Promise<void> => {
+  const apiKey = resolveGeminiKey(settings.geminiKey);
+  const modelId = settings.geminiModel || 'gemini-2.5-flash';
+
+  if (modelId.toLowerCase().startsWith('gemma')) {
+    throw new Error('Gemma models are text-only and are not available via this Gemini API. Select a supported Gemini model to test.');
+  }
+
+  if (isGeminiLiveModel(modelId)) {
+    await new Promise<void>((resolve, reject) => {
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(`wss://generativelanguage.googleapis.com/v1beta/live:connect?key=${encodeURIComponent(apiKey)}`);
+      } catch (err) {
+        return reject(err);
+      }
+
+      const timeout = setTimeout(() => {
+        ws.close();
+        reject(new Error('Gemini Live test timed out.'));
+      }, 8000);
+
+      ws.onopen = () => {
+        try {
+          ws.send(JSON.stringify({ model: `models/${modelId}`, contents: [{ role: 'user', parts: [{ text: 'ping' }] }] }));
+        } catch (err) {
+          clearTimeout(timeout);
+          reject(err);
+        }
+      };
+
+      ws.onmessage = () => {
+        clearTimeout(timeout);
+        ws.close();
+        resolve();
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('Gemini Live connection error.'));
+      };
+
+      ws.onclose = () => {
+        clearTimeout(timeout);
+      };
+    });
+    return;
+  }
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }] })
+  });
+  if (!resp.ok) {
+    throw new Error(`Gemini test failed: ${resp.status} ${resp.statusText}`);
+  }
+  const json = await resp.json().catch(() => null);
+  const text = (json as any)?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join(' ').trim();
+  if (!text) {
+    throw new Error('No response from Gemini.');
+  }
 };
 
 const analyzeWithOllama = async (
@@ -221,8 +517,8 @@ The subsequent images are reference examples:`;
   // If a reasoning model is configured, we use the 2-step pipeline.
   // The vision model is hardcoded to qwen3-vl as per requirements.
   const visionModel = "qwen3-vl:235b-instruct-cloud";
-  // Pipeline disabled to speed up processing time as per user request
-  const usePipeline = false; // Boolean(settings.ollamaReasoningModel);
+  // Use the 2-step pipeline (vision → reasoning/grading) when a reasoning model is configured
+  const usePipeline = Boolean(settings.ollamaReasoningModel);
 
   const normalizeVisionStatus = (value?: string | null) => {
     const lower = (value || '').toLowerCase().trim();
@@ -249,7 +545,7 @@ The subsequent images are reference examples:`;
       think: false, // Vision models usually don't think
       ragQuery: null // Disable RAG for vision step
     }, (partial) => {
-      // Stream vision output to the "Thinking" UI
+      // Stream vision output to the Thinking UI while in progress
       onThinking?.(`### Vision Analysis (Step 1/2)\n\`\`\`json\n${partial}\n\`\`\``);
     });
 
@@ -292,7 +588,7 @@ The subsequent images are reference examples:`;
       console.warn("Could not format vision JSON for display", e);
     }
 
-    // Force update the UI with the formatted vision trace immediately
+    // Surface the formatted vision summary to the Thinking panel once complete
     onThinking?.(visionTrace);
 
     console.log("--- [Pipeline] Step 1 (Vision) Complete ---");
@@ -385,10 +681,7 @@ Based on the visual analysis above and the provided context, evaluate the weld a
         ? (settings.ollamaThinkingLevel || 'low') 
         : (settings.ollamaThinking ?? true),
       ragQuery: ragQuery // Inject dynamic query based on defects
-    }, onPartial, (thinkingText) => {
-      // Append reasoning thinking to vision trace
-      onThinking?.(`${visionTrace}\n\n### Reasoning (Step 2/2)\n${thinkingText}`);
-    }, onMetrics);
+    }, onPartial, onThinking, onMetrics);
 
     // --- POST-PROCESSING: Extract Grades from Reasoning Report ---
     // The user prefers the grades generated by the reasoning model over the vision model.

@@ -267,6 +267,12 @@ export default function App() {
 
   // Persistence
   useEffect(() => {
+    // Check if the current settings have the OLD prompt and update it to the NEW default if so
+    const oldDefaultStart = "You are a strict Certified Welding Inspector (CWI) and expert instructor.\n\nYour role is to evaluate welding practice results to help students improve.";
+    if (settings.systemPrompt && settings.systemPrompt.includes(oldDefaultStart) && !settings.systemPrompt.includes("STEP 1: VISUAL ANALYSIS")) {
+       console.log("Auto-updating stale system prompt to new default.");
+       setSettings(prev => ({ ...prev, systemPrompt: DEFAULT_SETTINGS.systemPrompt }));
+    }
     localStorage.setItem('vision-settings', JSON.stringify(settings));
   }, [settings]);
 
@@ -331,10 +337,20 @@ export default function App() {
           const formattedSystemPrompt = makePromptHumanReadable(data.prompt);
           const formattedVisionPrompt = makePromptHumanReadable(data.visionPrompt);
 
-          if (formattedSystemPrompt && prev.systemPrompt !== formattedSystemPrompt) {
+          // Force update if the loaded prompt is the OLD default
+          const oldDefaultStart = "You are a strict Certified Welding Inspector (CWI) and expert instructor.\n\nYour role is to evaluate welding practice results to help students improve.";
+          const isOldDefault = formattedSystemPrompt && formattedSystemPrompt.includes(oldDefaultStart) && !formattedSystemPrompt.includes("STEP 1: VISUAL ANALYSIS");
+
+          if (isOldDefault) {
+             // If the DB has the old default, ignore it and let the new code constant take over (or explicitly set it)
+             // Actually, we should probably update the state to the NEW default if the current state is also old.
+             // But here we are loading FROM the DB. If the DB is stale, we should probably NOT use it if it matches the old default.
+             console.log("Detected stale system prompt in DB. Ignoring in favor of new default.");
+          } else if (formattedSystemPrompt && prev.systemPrompt !== formattedSystemPrompt) {
             next.systemPrompt = formattedSystemPrompt;
             changed = true;
           }
+
           if (formattedVisionPrompt && prev.visionPrompt !== formattedVisionPrompt) {
             next.visionPrompt = formattedVisionPrompt;
             changed = true;

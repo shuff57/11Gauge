@@ -57,7 +57,10 @@ SCORING STANDARDS:
     •    Unsatisfactory Joint Preparation
     •    Unsatisfactory Joint Design
 
-CRITICAL RULE: If the input data mentions defects (porosity, undercut, cracks, lack of fusion), deduct points proportional to severity. Minor defects should not result in a failing grade if the overall weld is sound.
+CRITICAL RULES (DEFECT PENALTIES):
+- Use proportional scoring instead of hard caps. For each defect type, estimate the % of weld length affected and apply a penalty: minor = 0.1 point per % length, moderate = 0.2 point per % length, severe = 0.3 point per % length. Sum penalties across defects; total penalty should typically not exceed 6 points.
+- Porosity: quantify pore count/clustering and % length affected; apply the same proportional penalty. Clustered/moderate/severe porosity should materially lower Defect Check and the overall average but without a hard cap.
+- If observations show no defects or only trace/minor isolated issues, keep penalties minimal (1–2 points total). Minor defects should not result in a failing grade if the overall weld is otherwise sound.
 
 FRAMEWORK FOR ANALYSIS:
 When analyzing the weld, you must evaluate:
@@ -106,6 +109,7 @@ OBJECTIVE:
 - Document objective measurements and visual facts only.
 - Describe defects with precise location and severity, but do not "fail" them.
 - Act as a high-resolution scanner converting visual data into text.
+- Pay special attention to porosity: count visible pores/pits, note clustering, and mark their exact segment/position along the bead.
 
 Analyze and document:
 1. Bead Consistency: Measure average width, variance %, and straightness.
@@ -181,8 +185,9 @@ Return ONLY this JSON structure:
   "detected_defects": [
     {
       "type": "Defect Type (e.g. Porosity, Undercut, Spatter)",
-      "location": "Location on weld",
-      "severity": "minor | moderate | severe"
+      "location": "Location on weld (e.g. 30-50% length, toe, crown)",
+      "severity": "minor | moderate | severe",
+      "count_or_extent": "Porosity count or % length affected"
     }
   ]
 }`;
@@ -200,6 +205,9 @@ const defaultOllamaUrl = nodeEnv?.OLLAMA_URL || '';
 const defaultCloudVisionModel = 'qwen3-vl:235b-instruct-cloud';
 const defaultOllamaModel = nodeEnv?.OLLAMA_MODEL || defaultCloudVisionModel;
 const defaultOllamaKey = '';
+const defaultGeminiKey = '';
+const defaultGeminiModel = 'gemini-2.5-flash';
+const defaultCloudflareAiModel = '@cf/llava-hf/llava-1.6-mistral-7b';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   provider: ModelProvider.OLLAMA,
@@ -210,13 +218,30 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ollamaKeyId: null,
   ollamaThinking: true,
   ollamaThinkingLevel: 'low',
+  cloudflareAiModel: defaultCloudflareAiModel,
+  geminiKey: defaultGeminiKey,
+  geminiModel: defaultGeminiModel,
+  geminiKeyId: null,
   systemPrompt: null,
   visionPrompt: null,
 };
 
 export const MODEL_LABELS = {
   [ModelProvider.OLLAMA]: 'Ollama (OpenSource)',
+  [ModelProvider.GEMINI]: 'Google (Gemini)',
 };
+
+export const GEMINI_MODELS = [
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Fast)' },
+  { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+  { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (Reasoning)' },
+];
+
+export const CLOUDFLARE_VISION_MODELS = [
+  { value: '@cf/llava-hf/llava-1.6-mistral-7b', label: 'LLaVA 1.6 Mistral 7B' },
+  { value: '@cf/llava-hf/llava-1.5-7b-hf', label: 'LLaVA 1.5 7B' },
+  { value: '@cf/microsoft/phi-3.5-vision-instruct', label: 'Phi-3.5 Vision Instruct' },
+];
 
 export const MATERIAL_TYPES = ['Carbon Steel', 'Stainless Steel', 'Aluminum', 'Titanium', 'Cast Iron', 'Copper'];
 

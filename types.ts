@@ -1,5 +1,6 @@
 export enum ModelProvider {
-  OLLAMA = 'OLLAMA'
+  OLLAMA = 'OLLAMA',
+  GEMINI = 'GEMINI'
 }
 
 export interface AppSettings {
@@ -11,6 +12,10 @@ export interface AppSettings {
   ollamaKeyId?: number | null;
   ollamaThinking?: boolean;
   ollamaThinkingLevel?: 'low' | 'medium' | 'high';
+  cloudflareAiModel?: string;
+  geminiKey?: string;
+  geminiModel?: string;
+  geminiKeyId?: number | null;
   systemPrompt?: string | null;
   visionPrompt?: string | null;
   materialType?: string;

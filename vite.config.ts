@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => {
           target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8788',
           changeOrigin: true,
         },
+        '/api/ai': {
+          target: process.env.DEV_PROXY_ORIGIN || 'http://localhost:8788',
+          changeOrigin: true,
+        },
       },
     },
     plugins: [react()],

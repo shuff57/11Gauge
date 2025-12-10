@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, Wifi, Settings, Terminal, Key, X, ExternalLink, Layout, Database, FileText } from 'lucide-react';
 import { AppSettings, ModelProvider, SessionUser } from '../types';
-import { MODEL_LABELS, MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS, ROD_TYPES } from '../constants';
+import { MODEL_LABELS, GEMINI_MODELS, MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS, ROD_TYPES } from '../constants';
 import { testConnection, getOllamaKey } from '../services/llm';
 
 type ProviderSlug = 'ollama';
@@ -170,6 +170,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
   const savedOllamaKeys = useMemo(() => savedKeys, [savedKeys]);
+  const isGeminiLiveSelection = !isOllama && Boolean(settings.geminiModel && settings.geminiModel.includes('live'));
 
   const handleSavedKeySelect = async (keyIdStr: string) => {
     const keyId = keyIdStr ? Number(keyIdStr) : null;
@@ -187,7 +188,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         throw new Error('Failed to load saved key');
       }
       const data = await response.json();
-      const value = data?.key?.value;
+      const value = (data as any)?.key?.value;
       if (!value) return;
 
       onUpdate({
@@ -255,7 +256,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {user && (
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-400">AI Provider</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[ModelProvider.OLLAMA, ModelProvider.GEMINI].map((provider) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    onClick={() => {
+                      if (provider === settings.provider) return;
+                      if (provider === ModelProvider.GEMINI && !settings.geminiModel) {
+                        handleChange('geminiModel', GEMINI_MODELS[0]?.value || 'gemini-2.5-flash');
+                      }
+                      handleChange('provider', provider);
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors ${
+                      settings.provider === provider
+                        ? 'border-white text-white bg-zinc-800'
+                        : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'
+                    }`}
+                  >
+                    <span>{MODEL_LABELS[provider]}</span>
+                    {settings.provider === provider && <CheckCircle className="w-4 h-4 text-green-400" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {isOllama && user && (
               <div className="space-y-1">
                 <label className="text-xs text-zinc-400">Use Saved Key</label>
                 <select
@@ -276,28 +304,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            <div className="space-y-4 pt-2 border-t border-zinc-800/50">
-              <div className="space-y-2">
-                <label className="text-sm text-zinc-300 flex items-center gap-2">
-                  <span>Reasoning Model</span>
-                </label>
-                <select
-                  value={settings.ollamaReasoningModel || ''}
-                  onChange={(e) => handleChange('ollamaReasoningModel', e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                >
-                  <option value="gpt-oss:20b-cloud">ChatGPT (Lite)</option>
-                  <option value="gpt-oss:120b-cloud">ChatGPT</option>
-                  <option value="gemini-3-pro-preview:latest">Gemini 3 Pro</option>
-                  <option value="kimi-k2:1t-cloud">Kimi K2 Thinking</option>
-                  <option value="deepseek-v3.1:671b-cloud">DeepSeek-V3.1</option>
-                  
-                </select>
+            {isOllama && (
+              <div className="space-y-4 pt-2 border-t border-zinc-800/50">
+                <div className="space-y-2">
+                  <label className="text-sm text-zinc-300 flex items-center gap-2">
+                    <span>Reasoning Model</span>
+                  </label>
+                  <select
+                    value={settings.ollamaReasoningModel || ''}
+                    onChange={(e) => handleChange('ollamaReasoningModel', e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                  >
+                    <option value="gpt-oss:20b-cloud">ChatGPT (Lite)</option>
+                    <option value="gpt-oss:120b-cloud">ChatGPT</option>
+                    <option value="gemini-3-pro-preview:latest">Gemini 3 Pro</option>
+                    <option value="kimi-k2:1t-cloud">Kimi K2 Thinking</option>
+                    <option value="deepseek-v3.1:671b-cloud">DeepSeek-V3.1</option>
+                    
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
+
+            {!isOllama && (
+              <div className="space-y-4 pt-2 border-t border-zinc-800/50">
+                <div className="space-y-2">
+                  <label className="text-sm text-zinc-300">Gemini API Key</label>
+                  <input
+                    type="password"
+                    value={settings.geminiKey || ''}
+                    onChange={(e) => handleChange('geminiKey', e.target.value)}
+                    placeholder="Paste your Gemini API key"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                  />
+                  <p className="text-[10px] text-zinc-500">Keys are kept local unless you save them in Key Manager.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm text-zinc-300">Gemini Model</label>
+                  <select
+                    value={settings.geminiModel || ''}
+                    onChange={(e) => handleChange('geminiModel', e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                  >
+                    {GEMINI_MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                  {isGeminiLiveSelection && (
+                    <p className="text-[10px] text-amber-300">Live API models are experimental and use a WebSocket session; expect different latency/behavior.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
-              {settings.ollamaReasoningModel?.includes('gpt-oss') ? (
+              {isOllama && settings.ollamaReasoningModel?.includes('gpt-oss') ? (
                 <div className="space-y-2">
                   <label className="text-sm text-zinc-300">Thinking Level (GPT-OSS)</label>
                   <select
@@ -310,7 +372,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <option value="high">High</option>
                   </select>
                 </div>
-              ) : (
+              ) : isOllama ? (
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -323,25 +385,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Enable Thinking (Reasoning Trace)
                   </label>
                 </div>
-              )}
+              ) : null}
             </div>
 
-            <div className="pt-2">
-              <p className="text-[10px] text-zinc-500 mb-2">
-                Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
-              </p>
-              <a 
-                href="https://ollama.com/settings" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-              >
-                View Usage & Account Settings (Ollama Cloud)
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
+            {isOllama && (
+              <div className="pt-2">
+                <p className="text-[10px] text-zinc-500 mb-2">
+                  Generates the final report based on visual findings. Visual analysis is handled automatically by Qwen3-VL.
+                </p>
+                <a 
+                  href="https://ollama.com/settings" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                >
+                  View Usage & Account Settings (Ollama Cloud)
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
 
-            {user ? (
+            {isOllama && user ? (
               <>
               </>
             ) : (
