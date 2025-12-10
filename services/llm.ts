@@ -1,6 +1,6 @@
 // Service for handling LLM interactions and media processing
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider, ExampleImageSummary } from "../types";
-import { resolveSystemPrompt, resolveVisionPrompt } from "../constants";
+import { resolveSystemPrompt, resolveVisionPrompt, resolveCombinedPrompt } from "../constants";
 import { getCachedExampleImageUrl } from "./exampleImages";
 
 export const VIDEO_UPLOAD_LIMITS = {
@@ -56,6 +56,44 @@ const finalizeWithProgress = async (
   return result;
 };
 
+const buildGeminiUnifiedPrompt = (settings: AppSettings, payload: MediaPayload): string => {
+  const visionPrompt = resolveVisionPrompt(settings.visionPrompt);
+  const reasoningPrompt = resolveSystemPrompt(settings.systemPrompt);
+
+  const combinedBase = resolveCombinedPrompt();
+
+  const materialContext: string[] = [];
+  if (settings.materialType) materialContext.push(`Material Type: ${settings.materialType}`);
+  if (settings.weldProcess) materialContext.push(`Weld Process: ${settings.weldProcess}`);
+  if (settings.materialThickness) materialContext.push(`Material Thickness: ${settings.materialThickness}`);
+  if (settings.jointType) materialContext.push(`Joint Type: ${settings.jointType}`);
+  if (settings.weldPosition) materialContext.push(`Weld Position: ${settings.weldPosition}`);
+  if (settings.rodType && settings.weldProcess === 'SMAW') materialContext.push(`Rod Type: ${settings.rodType}`);
+
+  const videoNote = payload.kind === 'video'
+    ? `\n\nNOTE: The user supplied a short video clip converted into ${payload.frames.length} chronological frames. Analyze trends across the frames as a single scene.`
+    : '';
+
+  const contextBlock = materialContext.length > 0
+    ? `\n\nCONTEXT:\nThe user provided the following weld specifications:\n${materialContext.join('\n')}`
+    : '';
+
+  return [
+    combinedBase,
+    '',
+    'STEP 1 — Observation (use as guidance; do not stop here):',
+    visionPrompt,
+    '',
+    'STEP 2 — Evaluation & Feedback (final output):',
+    'Use the rubric/instructions below to produce the final Markdown table and summary report as your only output.',
+    reasoningPrompt,
+    contextBlock,
+    videoNote,
+    '',
+    'Important: Despite the observation prompt asking you not to grade, you MUST complete Step 2 and output the final graded report as described there. Keep everything in one response.'
+  ].filter(Boolean).join('\n');
+};
+
 const analyzeWithGeminiLive = async (
   payload: MediaPayload,
   settings: AppSettings,
@@ -77,7 +115,7 @@ const analyzeWithGeminiLive = async (
 
   onProgress?.({ phase: 'awaiting-model', message: `Connecting to Gemini Live (${modelId})...` });
 
-  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
+  const combinedPrompt = buildGeminiUnifiedPrompt(settings, payload);
   const wsUrl = `wss://generativelanguage.googleapis.com/v1beta/live:connect?key=${encodeURIComponent(apiKey)}`;
 
   return await new Promise<string>((resolve, reject) => {
@@ -100,14 +138,14 @@ const analyzeWithGeminiLive = async (
     ws.onopen = () => {
       const setupMessage = {
         model: `models/${modelId}`,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: combinedPrompt }] },
         // Single-turn input with inline image and prompt
         contents: [
           {
             role: 'user',
             parts: [
               { inlineData: { data: base64, mimeType: first.mimeType || 'image/jpeg' } },
-              { text: 'Analyze using the provided system prompt.' }
+              { text: 'Analyze using the unified observation + grading instructions.' }
             ]
           }
         ]
@@ -186,13 +224,13 @@ const analyzeWithGemini = async (
 
   onProgress?.({ phase: 'awaiting-model', message: `Sending to Gemini (${modelId})...` });
 
-  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
+  const combinedPrompt = buildGeminiUnifiedPrompt(settings, payload);
   const body = {
     contents: [
       {
         role: 'user',
         parts: [
-          { text: systemPrompt },
+          { text: combinedPrompt },
           { inlineData: { data: base64, mimeType: first.mimeType || 'image/jpeg' } }
         ]
       }

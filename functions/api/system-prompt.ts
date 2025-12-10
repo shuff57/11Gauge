@@ -1,4 +1,4 @@
-import { DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from "../../constants";
+import { DEFAULT_REASONING_PROMPT, DEFAULT_VISION_PROMPT } from "../../constants";
 
 interface Env {
   SYSTEM_PROMPT?: string;
@@ -6,8 +6,8 @@ interface Env {
 }
 
 export const onRequest = async ({ env }: { env: Env }) => {
-  let systemPrompt = env.SYSTEM_PROMPT?.trim() || null;
-  let visionPrompt = null;
+  let systemPrompt = env.SYSTEM_PROMPT?.trim() || DEFAULT_REASONING_PROMPT;
+  let visionPrompt = DEFAULT_VISION_PROMPT;
 
   if (env.USERS_DB) {
     try {

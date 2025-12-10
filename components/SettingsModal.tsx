@@ -358,6 +358,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <option value="gpt-oss:20b-cloud">ChatGPT (Lite)</option>
                     <option value="gpt-oss:120b-cloud">ChatGPT</option>
+                    <option value="qwen3-next:80b-cloud">Qwen3-Next 80B</option>
                     <option value="gemini-3-pro-preview:latest">Gemini 3 Pro</option>
                     <option value="kimi-k2:1t-cloud">Kimi K2 Thinking</option>
                     <option value="deepseek-v3.1:671b-cloud">DeepSeek-V3.1</option>

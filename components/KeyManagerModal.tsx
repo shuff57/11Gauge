@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users, FileText, RotateCcw, BookMarked, Plus } from 'lucide-react';
 import { AppSettings, ExampleImageSummary, ModelProvider, PrimarySourceSummary, SessionUser } from '../types';
-import { DEFAULT_SYSTEM_PROMPT, DEFAULT_VISION_PROMPT } from '../constants';
+import { DEFAULT_REASONING_PROMPT, DEFAULT_VISION_PROMPT } from '../constants';
 import { testConnection } from '../services/llm';
 import { UserManagementPanel } from './UserManagementPanel';
 import { PrimarySourceModal } from './PrimarySourceModal';
@@ -87,7 +87,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     [settings.visionPrompt]
   );
   const displaySystemPrompt = useMemo(
-    () => makePromptHumanReadable(settings.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
+    () => makePromptHumanReadable(settings.systemPrompt) ?? DEFAULT_REASONING_PROMPT,
     [settings.systemPrompt]
   );
 

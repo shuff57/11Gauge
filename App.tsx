@@ -52,7 +52,7 @@ import {
   SessionUser,
   ExampleImageSummary
 } from './types';
-import { MODEL_LABELS, DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, resolveSystemPrompt } from './constants';
+import { MODEL_LABELS, DEFAULT_SETTINGS, DEFAULT_REASONING_PROMPT, resolveSystemPrompt, GEMINI_MODELS } from './constants';
 import { analyzeMedia, getOllamaKey, VIDEO_UPLOAD_LIMITS } from './services/llm';
 import { fetchPrimarySources, fetchPrimarySourceManifest, invalidatePrimarySourceCache } from './services/sources';
 import { fetchExampleImages, invalidateExampleImageCache, selectReferenceImages } from './services/exampleImages';
@@ -82,7 +82,7 @@ export default function App() {
       merged.ollamaReasoningModel = DEFAULT_SETTINGS.ollamaReasoningModel;
     }
     const formattedSystemPrompt = makePromptHumanReadable(merged.systemPrompt);
-    merged.systemPrompt = formattedSystemPrompt?.trim() ? formattedSystemPrompt : DEFAULT_SYSTEM_PROMPT;
+    merged.systemPrompt = formattedSystemPrompt?.trim() ? formattedSystemPrompt : DEFAULT_REASONING_PROMPT;
     merged.visionPrompt = makePromptHumanReadable(merged.visionPrompt);
     return merged;
   };
@@ -136,7 +136,9 @@ export default function App() {
   const hasSelection = selectedFiles.length > 0;
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const providerMenuRef = useRef<HTMLDivElement | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [reasoningTrace, setReasoningTrace] = useState<string | null>(null);
@@ -194,6 +196,18 @@ export default function App() {
         return progress.message || 'Working...';
     }
   };
+
+  const handleHeaderProviderSelect = React.useCallback((provider: ModelProvider) => {
+    setSettings((prev) => {
+      if (prev.provider === provider) return prev;
+      if (provider === ModelProvider.GEMINI) {
+        const nextGeminiModel = prev.geminiModel || GEMINI_MODELS[0]?.value || 'gemini-2.5-flash';
+        return { ...prev, provider, geminiModel: nextGeminiModel };
+      }
+      return { ...prev, provider: ModelProvider.OLLAMA };
+    });
+    setIsProviderMenuOpen(false);
+  }, []);
 
   const handleKeysUpdated = React.useCallback(() => {
     setKeyUpdateTrigger(prev => prev + 1);
@@ -382,6 +396,9 @@ export default function App() {
       
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setIsUserMenuOpen(false);
+      }
+      if (providerMenuRef.current && !providerMenuRef.current.contains(e.target)) {
+        setIsProviderMenuOpen(false);
       }
     }
 
@@ -778,7 +795,40 @@ export default function App() {
             )}
           </button>
 
-        <div className="flex items-center gap-3 relative">
+          <div className="flex items-center gap-3">
+            <div className="relative hidden sm:block" ref={providerMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProviderMenuOpen((open) => !open)}
+                className="text-xs font-mono text-zinc-600 uppercase tracking-widest hover:text-zinc-400 transition-colors max-w-[10rem] truncate text-left"
+                aria-haspopup="listbox"
+                aria-expanded={isProviderMenuOpen}
+              >
+                {MODEL_LABELS[settings.provider]}
+              </button>
+              {isProviderMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg z-50 py-1">
+                  {[ModelProvider.GEMINI, ModelProvider.OLLAMA].map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      onClick={() => handleHeaderProviderSelect(provider)}
+                      className={`w-full text-left px-3 py-2 text-xs font-mono uppercase tracking-wider transition-colors ${
+                        settings.provider === provider
+                          ? 'text-white bg-zinc-800'
+                          : 'text-zinc-600 hover:text-white hover:bg-zinc-800'
+                      }`}
+                      role="option"
+                      aria-selected={settings.provider === provider}
+                    >
+                      {MODEL_LABELS[provider]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 relative">
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             className={`p-2 rounded-full transition-colors ${isSettingsOpen ? 'text-white bg-zinc-900' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
@@ -846,7 +896,11 @@ export default function App() {
             </button>
           )}
 
-          <AuthModal
+            </div>
+          </div>
+        </header>
+
+        <AuthModal
             isOpen={isAuthOpen}
             onClose={() => setIsAuthOpen(false)}
             onSuccess={(user) => setUser(user)}
@@ -930,9 +984,6 @@ export default function App() {
               />
             </Suspense>
           )}
-
-        </div>
-      </header>
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
