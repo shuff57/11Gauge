@@ -12,6 +12,7 @@ export interface AppSettings {
   ollamaKeyId?: number | null;
   ollamaThinking?: boolean;
   ollamaThinkingLevel?: 'low' | 'medium' | 'high';
+  useOllamaAioPrompt?: boolean;
   cloudflareAiModel?: string;
   geminiKey?: string;
   geminiModel?: string;

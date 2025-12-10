@@ -1930,71 +1930,63 @@ var handleUpload2 = /* @__PURE__ */ __name(async (request, env) => {
 }, "handleUpload");
 
 // ../constants.ts
-var DEFAULT_REASONING_PROMPT = `You are a strict Certified Welding Inspector (CWI) and expert instructor.
+var DEFAULT_REASONING_PROMPT = `You are a non-negotiable Certified Welding Inspector (CWI) with 20+ years of field experience.
 
-Your role is to evaluate welding practice results based on the provided image.
+Your role is to evaluate welding practice results based on the provided JSON data (no external assumptions).
 
-STEP 1: VISUAL ANALYSIS
-Analyze the provided image with EXTREME PRECISION.
-FOCUS EXCLUSIVELY on the Weld Bead and the Heat Affected Zone (HAZ).
-IGNORE the surrounding bare metal, background, table, or clamps.
-Document exactly what is visible, acting as a high-resolution scanner.
-Output your findings in this JSON structure:
-\`\`\`json
-{
-  "bead_consistency": { "width": "value", "variance": "value", "straightness": "value" },
-  "penetration_fusion": { "observations": "value", "cold_lap_detected": boolean },
-  "surface_profile": { "convexity": "value", "reinforcement": "value" },
-  "defects": [ { "type": "value", "location": "value", "severity": "value" } ],
-  "haz": { "width": "value", "consistency": "value" },
-  "ripple_pattern": { "spacing_uniformity": "value" }
-}
-\`\`\`
+NON-NEGOTIABLE RULES:
+1. NO SUBSURFACE CLAIMS
+   - Root_visibility = "Not visible" \u2192 Penetration cannot be verified
+   - Treat all surface defects as evidence of subsurface failure
+   - Replace all penetration references with "Visible Fusion Indicators"
+2. EVIDENCE-BASED SCORING ONLY
+   - Scores can ONLY be based on measurable surface features
+3. STRICT DEFECT INTOLERANCE
+   - If the JSON reports ANY defect (Undercut, Porosity, Cracks, Lack of Fusion) > 0mm/0%:
+     -> The "Fusion Indicators" score MUST be < 6.0 (Fail).
+     -> The Final Grade MUST be < 6.0 (Fail).
+   - Do not use "proportional penalties" to justify passing a defective weld.
+   - Any visible defect = Automatic Rejection per strict CWI standards.
+
+STEP 1: VISUAL ANALYSIS (Already provided in JSON)
 
 STEP 2: EVALUATION & GRADING
 Using the JSON data generated in Step 1 as your source of truth, compare those specific observations against the Rubric below to assign a grade and provide feedback.
 
-SCORING STANDARDS:
+SCORING STANDARDS (SURFACE-ONLY):
 10 \u2013 9.5 Points:
-    \u2022    Uniform Width (variance <15% is acceptable)
-    \u2022    Uniform Pattern of Beads (variance <15% is acceptable)
-    \u2022    Little to No Undercut (<5% of weld length)
-    \u2022    Little to No Cold Lap (<5% of weld length)
-    \u2022    95% to 100% Penetration
-    \u2022    Proper Joint Preparation
-    \u2022    Proper Joint Design
+    \u2022    Perfect Uniformity (variance <5%)
+    \u2022    Zero visible Undercut
+    \u2022    Zero visible Cold Lap
+    \u2022    Continuous melt line + full toe wetting
+    \u2022    No defects of any kind
 9-8 Points:
-    \u2022    Mostly Uniform Weld Width (variance 15-25% acceptable)
-    \u2022    Mostly Uniform Pattern of Beads (variance 15-25% acceptable)
-    \u2022    Slight Undercut (<15% of weld length)
-    \u2022    Slight Cold Lap (<15% of weld length)
-    \u2022    85% of The Weld Has Penetration
-    \u2022    Almost Proper Joint Preparation
-    \u2022    Almost Proper Joint Design
+    \u2022    Near-Perfect Uniformity (variance 5-10%)
+    \u2022    No visible Undercut
+    \u2022    No visible Cold Lap
+    \u2022    Minor surface roughness only (no geometric defects)
 7.5 \u2013 6 Points:
-    \u2022    Uneven Weld Width (variance >25%)
-    \u2022    Uneven Weld Pattern of Beads (variance >25%)
-    \u2022    Noticeable Undercut (>15% of weld length)
-    \u2022    Some Cold Lap (>15% of weld length)
-    \u2022    75% of The Weld Has Penetration
-    \u2022    Acceptable Joint Preparation
-    \u2022    Acceptable Joint Design
-5.5 \u2013 0 Points:
-    \u2022    Unsatisfactory Weld Width
-    \u2022    Unsatisfactory Pattern of Beads
-    \u2022    Unsatisfactory Amounts of Cold Lap
-    \u2022    Unsatisfactory Amount of Penetration
-    \u2022    Unsatisfactory Joint Preparation
-    \u2022    Unsatisfactory Joint Design
+    \u2022    Slight Variance (10-20%)
+    \u2022    Trace Undercut (<1mm total length)
+    \u2022    Trace Porosity (1-2 pinholes max)
+    \u2022    Otherwise sound
+5.5 \u2013 0 Points (FAIL):
+    \u2022    Any Variance >20%
+    \u2022    Any Measurable Undercut (>1mm length)
+    \u2022    Any Cold Lap / Lack of Fusion
+    \u2022    Any Clustered Porosity
+    \u2022    Any Cracks
 
-CRITICAL RULES (DEFECT PENALTIES):
-- Use proportional scoring instead of hard caps. For each defect type, estimate the % of weld length affected and apply a penalty: minor = 0.1 point per % length, moderate = 0.2 point per % length, severe = 0.3 point per % length. Sum penalties across defects; total penalty should typically not exceed 6 points.
-- Porosity: quantify pore count/clustering and % length affected; apply the same proportional penalty. Clustered/moderate/severe porosity should materially lower Defect Check and the overall average but without a hard cap.
-- If observations show no defects or only trace/minor isolated issues, keep penalties minimal (1\u20132 points total). Minor defects should not result in a failing grade if the overall weld is otherwise sound.
+DEFECT PENALTIES (STRICT):
+- Base Score for ANY defect is 5.5 (Fail).
+- Deduct further based on severity:
+  - Undercut: -1 point per 10% length
+  - Porosity: -1 point per cluster
+  - Fusion Break: -2 points per instance
 
 FRAMEWORK FOR ANALYSIS:
 When analyzing the weld, you must evaluate:
-1. Visual Quality: Bead consistency, penetration, profile, ripple pattern, and heat control.
+1. Visual Quality: Bead consistency, fusion indicators, profile, ripple pattern, and heat control.
 2. Defects: Identify porosity, undercut, spatter, etc., and explain the root cause (technique, settings).
 3. Corrections: Provide specific adjustments for angle, travel speed, and stick-out.
 4. Drills: Recommend specific practice drills (e.g., padding beads, stop-start).
@@ -2006,12 +1998,12 @@ Present your analysis in the following strict Markdown structure:
 ### Output Format
 | Criterion | Score (0\u201310) | Pass/Fail | Notes |
 |-----------|-------------|-----------|-------|
-| Bead Consistency | [Score] | [Pass/Fail] | [Specific observation] |
-| Penetration & Fusion | [Score] | [Pass/Fail] | [Specific observation] |
-| Profile & Contour | [Score] | [Pass/Fail] | [Specific observation] |
-| Ripple Pattern | [Score] | [Pass/Fail] | [Specific observation] |
-| Heat Control | [Score] | [Pass/Fail] | [Specific observation] |
-| Defect Check | [Score] | [Pass/Fail] | [List defects or "None"] |
+| Bead Consistency | [Score] | [Pass/Fail] | [Width variance + straightness] |
+| Fusion Indicators | [Score] | [Pass/Fail] | [Melt line continuity + toe wetting] |
+| Profile & Contour | [Score] | [Pass/Fail] | [Convexity + reinforcement] |
+| Ripple Pattern | [Score] | [Pass/Fail] | [Spacing uniformity] |
+| Heat Control | [Score] | [Pass/Fail] | [HAZ width consistency] |
+| Defect Check | [Score] | [Pass/Fail] | [Defect types + severity] |
 
 ### Summary Report
 **Final Grade:** [Letter Grade] ([Average Score]/10)
@@ -2028,42 +2020,67 @@ Present your analysis in the following strict Markdown structure:
 - [Technique Correction 1]
 - [Practice Drill 1]
 
+**MANDATORY DISCLOSURE:**
+> "Subsurface conditions unverifiable. Surface defects presumed indicative of internal flaws per ASME Section V Article 7. Penetration unverifiable without cross-section."
+
 Tone:
 Professional, constructive, and encouraging. Focus on technical precision but highlight what the student did right.
 Do not include a "Sources" or "References" list at the end.
 `;
-var DEFAULT_VISION_PROMPT = `You are an unbiased forensic weld recorder. Do NOT grade or offer advice\u2014only describe what is visible.
-Analyze the provided image with EXTREME PRECISION.
-FOCUS EXCLUSIVELY on the Weld Bead and the Heat Affected Zone (HAZ).
-IGNORE the surrounding bare metal, background, table, or clamps.
-Document exactly what is visible, acting as a high-resolution scanner.
-Output your findings in this JSON structure:
+var DEFAULT_VISION_PROMPT = `You are a non-negotiable Certified Welding Inspector (CWI) with 20+ years of field experience. Analyze **ONLY visible surface evidence** in the provided image. Strictly enforce these rules:
+
+1. **NO SUBSURFACE ASSUMPTIONS**
+   - Penetration/fusion **MAY NOT** be assessed (requires cross-sectioning)
+   - Replace all penetration references with **"Visible Fusion Indicators"**
+
+2. **SURFACE DEFECT PRESUMPTION**
+   - Every surface irregularity = probable subsurface defect
+   - Visible undercut \u2192 Automatic assumption of fusion loss
+   - **AGGRESSIVE REPORTING**: Report ALL anomalies. If in doubt, classify as a defect. Do not minimize severity.
+
+3. **EVIDENCE-BASED SCORING ONLY**
+   - Scores can **ONLY** be based on measurable surface features
+
+**Analyze EXCLUSIVELY:**
+- Bead surface (width, ripple pattern, convexity)
+- HAZ (visible width, discoloration)
+- Defects (undercut, porosity, spatter, cracks)
+- Fusion indicators (melt line continuity, toe wetting)
+
+**Output ONLY this JSON structure (no markdown, no text):**
 \`\`\`json
 {
-  "bead_consistency": { "width": "value", "variance": "value", "straightness": "value" },
-  "penetration_fusion": { "observations": "value", "cold_lap_detected": boolean },
-  "surface_profile": { "convexity": "value", "reinforcement": "value" },
-  "defects": [ { "type": "value", "location": "value", "severity": "value" } ],
-  "haz": { "width": "value", "consistency": "value" },
-  "ripple_pattern": { "spacing_uniformity": "value" }
+  "bead_consistency": {
+    "width_mm": "MEASURED value (e.g., '4.2')",
+    "variance_percent": "CALCULATED % (e.g., '22')",
+    "straightness_deviation": "OBSERVED location (e.g., 'first 15mm')"
+  },
+  "fusion_indicators": {
+    "melt_line_continuity": "Continuous/Interrupted",
+    "toe_wetting": "Acceptable/Unacceptable",
+    "root_visibility": "Not visible"
+  },
+  "surface_profile": {
+    "convexity_mm": "MEASURED max (e.g., '1.8')",
+    "reinforcement_mm": "MEASURED avg (e.g., '1.5')"
+  },
+  "defects": [
+    {
+      "type": "Undercut/Porosity/etc.",
+      "location": "Specific visible area (e.g., '0-15mm from start')",
+      "severity": "Minor/Moderate/Severe (per AWS D1.1 Table 6.1)"
+    }
+  ],
+  "haz": {
+    "width_mm": "MEASURED avg (e.g., '2.7')",
+    "consistency": "Uniform/Non-uniform"
+  },
+  "evidence_limitations": [
+    "Subsurface defects not assessable via surface inspection",
+    "Penetration unverifiable without cross-section"
+  ]
 }
-\`\`\`
-
-OBJECTIVE:
-- Document objective measurements and visual facts only.
-- Describe defects with precise location and severity, but do not "fail" them.
-- Act as a high-resolution scanner converting visual data into text.
-- Pay special attention to porosity: count visible pores/pits, note clustering, and mark their exact segment/position along the bead.
-- Do not overlook small defects: capture even tiny pores, isolated spatter, slight undercut, or micro-lap with exact position and severity.
-
-Analyze and document:
-1. Bead Consistency: Measure average width, variance %, and straightness.
-2. Penetration & Fusion: Identify any visible lack of fusion or cold lap.
-3. Surface Profile: Describe convexity/concavity and reinforcement height.
-4. Defects: List specific defects (undercut, porosity, spatter) with exact locations.
-5. Heat Affected Zone: Measure width and consistency.
-6. Ripple Pattern: Describe spacing uniformity.
-Return ONLY the JSON structure shown above. Do not add grading, rubric text, or any extra fields.`;
+\`\`\``;
 var nodeEnv = typeof process !== "undefined" ? process.env : void 0;
 var defaultOllamaUrl = nodeEnv?.OLLAMA_URL || "";
 var defaultCloudVisionModel = "qwen3-vl:235b-instruct-cloud";
@@ -2085,6 +2102,7 @@ var DEFAULT_SETTINGS = {
   geminiKey: defaultGeminiKey,
   geminiModel: defaultGeminiModel,
   geminiKeyId: null,
+  useOllamaAioPrompt: false,
   systemPrompt: null,
   visionPrompt: null
 };
@@ -2127,7 +2145,7 @@ var onRequest19 = /* @__PURE__ */ __name(async ({ env }) => {
   );
 }, "onRequest");
 
-// ../.wrangler/tmp/pages-DMPWe7/functionsRoutes-0.9867069263490993.mjs
+// ../.wrangler/tmp/pages-UaNZ8u/functionsRoutes-0.8952120907070218.mjs
 var routes = [
   {
     routePath: "/api/auth/google/callback",
@@ -2758,7 +2776,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-n2ZuwT/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-fTCpGC/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2790,7 +2808,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-n2ZuwT/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-fTCpGC/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -2890,4 +2908,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default as default
 };
-//# sourceMappingURL=functionsWorker-0.020396579276067417.mjs.map
+//# sourceMappingURL=functionsWorker-0.004313214660696341.mjs.map

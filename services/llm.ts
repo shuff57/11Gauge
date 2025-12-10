@@ -1,6 +1,6 @@
 // Service for handling LLM interactions and media processing
 import { AppSettings, AnalysisProgress, MediaPayload, ModelProvider, ExampleImageSummary } from "../types";
-import { resolveSystemPrompt, resolveVisionPrompt, resolveCombinedPrompt } from "../constants";
+import { resolveSystemPrompt, resolveVisionPrompt, resolveCombinedPrompt, resolveOllamaAioPrompt } from "../constants";
 import { getCachedExampleImageUrl } from "./exampleImages";
 
 export const VIDEO_UPLOAD_LIMITS = {
@@ -60,7 +60,7 @@ const buildGeminiUnifiedPrompt = (settings: AppSettings, payload: MediaPayload):
   const visionPrompt = resolveVisionPrompt(settings.visionPrompt);
   const reasoningPrompt = resolveSystemPrompt(settings.systemPrompt);
 
-  const combinedBase = resolveCombinedPrompt();
+  const combinedBase = resolveCombinedPrompt(settings.systemPrompt);
 
   const materialContext: string[] = [];
   if (settings.materialType) materialContext.push(`Material Type: ${settings.materialType}`);
@@ -81,10 +81,10 @@ const buildGeminiUnifiedPrompt = (settings: AppSettings, payload: MediaPayload):
   return [
     combinedBase,
     '',
-    'STEP 1 — Observation (use as guidance; do not stop here):',
+    'STEP 1 G�� Observation (use as guidance; do not stop here):',
     visionPrompt,
     '',
-    'STEP 2 — Evaluation & Feedback (final output):',
+    'STEP 2 G�� Evaluation & Feedback (final output):',
     'Use the rubric/instructions below to produce the final Markdown table and summary report as your only output.',
     reasoningPrompt,
     contextBlock,
@@ -98,7 +98,8 @@ const analyzeWithGeminiLive = async (
   payload: MediaPayload,
   settings: AppSettings,
   onProgress?: ProgressCallback,
-  onThinking?: (text: string) => void
+  onThinking?: (text: string) => void,
+  onPartialResponse?: (text: string) => void
 ): Promise<string> => {
   const apiKey = resolveGeminiKey(settings.geminiKey);
   const modelId = settings.geminiModel || 'gemini-2.5-flash-live';
@@ -165,6 +166,7 @@ const analyzeWithGeminiLive = async (
         if (chunkText) {
           accumulated += chunkText;
           onThinking?.(accumulated);
+          onPartialResponse?.(accumulated);
         }
 
         const finishReason = msg?.candidates?.[0]?.finishReason || msg?.done || msg?.status === 'completed';
@@ -198,7 +200,8 @@ const analyzeWithGemini = async (
   payload: MediaPayload,
   settings: AppSettings,
   onProgress?: ProgressCallback,
-  onThinking?: (text: string) => void
+  onThinking?: (text: string) => void,
+  onPartialResponse?: (text: string) => void
 ): Promise<string> => {
   const apiKey = resolveGeminiKey(settings.geminiKey);
   const modelId = settings.geminiModel || 'gemini-2.5-flash';
@@ -208,7 +211,7 @@ const analyzeWithGemini = async (
   }
 
   if (isGeminiLiveModel(modelId)) {
-    return analyzeWithGeminiLive(payload, settings, onProgress, onThinking);
+    return analyzeWithGeminiLive(payload, settings, onProgress, onThinking, onPartialResponse);
   }
 
   if (!payload.frames.length) {
@@ -251,6 +254,10 @@ const analyzeWithGemini = async (
   }
 
   let accumulated = '';
+  let mainOutput = '';
+  let jsonScratch = '';
+  let inJsonBlock = false;
+
   if (streamResp.body && 'getReader' in streamResp.body) {
     const reader = streamResp.body.getReader();
     const decoder = new TextDecoder();
@@ -268,18 +275,73 @@ const analyzeWithGemini = async (
         try {
           const json = JSON.parse(payloadStr);
           const chunkText = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join(' ');
-          if (chunkText) {
-            accumulated += chunkText;
-            onThinking?.(accumulated);
+          if (!chunkText) continue;
+
+          accumulated += chunkText;
+
+          let remaining = chunkText;
+          while (remaining.length) {
+            if (inJsonBlock) {
+              const endIdx = remaining.indexOf('```');
+              if (endIdx === -1) {
+                jsonScratch += remaining;
+                remaining = '';
+                break;
+              }
+              jsonScratch += remaining.slice(0, endIdx);
+              const completed = jsonScratch.trim();
+              onThinking?.(`### Vision JSON (Gemini)
+\`\`\`json
+${completed}
+\`\`\``);
+              jsonScratch = '';
+              inJsonBlock = false;
+              remaining = remaining.slice(endIdx + 3);
+              continue;
+            }
+
+            const startIdx = remaining.indexOf('```json');
+            if (startIdx === -1) {
+              mainOutput += remaining;
+              onPartialResponse?.(mainOutput);
+              remaining = '';
+              break;
+            }
+
+            if (startIdx > 0) {
+              const pre = remaining.slice(0, startIdx);
+              mainOutput += pre;
+              onPartialResponse?.(mainOutput);
+            }
+
+            inJsonBlock = true;
+            jsonScratch = '';
+            remaining = remaining.slice(startIdx + 7);
+          }
+
+          if (inJsonBlock && jsonScratch.trim()) {
+            onThinking?.(`### Vision JSON (Gemini)
+\`\`\`json
+${jsonScratch}
+\`\`\``);
+          } else if (!inJsonBlock) {
+            onThinking?.(mainOutput.trim() || accumulated.trim());
           }
         } catch (e) {
           // ignore JSON parse issues on partial lines
         }
       }
     }
-    if (accumulated.trim()) {
-      onThinking?.(accumulated.trim());
-      return accumulated.trim();
+
+    const finalText = accumulated.trim();
+    if (finalText) {
+      if (mainOutput.trim()) {
+        onPartialResponse?.(mainOutput.trim());
+      } else {
+        onPartialResponse?.(finalText);
+      }
+      onThinking?.(inJsonBlock && jsonScratch ? jsonScratch : finalText);
+      return finalText;
     }
   }
 
@@ -299,6 +361,7 @@ const analyzeWithGemini = async (
   const text = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join(' ').trim();
   if (text) {
     onThinking?.(text);
+    onPartialResponse?.(text);
     return text;
   }
   return 'No response returned from Gemini.';
@@ -355,7 +418,7 @@ export const analyzeMedia = async (
 
   if (settings.provider === ModelProvider.GEMINI) {
     return finalizeWithProgress(
-      () => analyzeWithGemini(payload, settings, options?.onProgress, options?.onThinking),
+      () => analyzeWithGemini(payload, settings, options?.onProgress, options?.onThinking, options?.onPartialResponse),
       options?.onProgress
     );
   }
@@ -555,8 +618,8 @@ The subsequent images are reference examples:`;
   // If a reasoning model is configured, we use the 2-step pipeline.
   // The vision model is hardcoded to qwen3-vl as per requirements.
   const visionModel = "qwen3-vl:235b-instruct-cloud";
-  // Use the 2-step pipeline (vision → reasoning/grading) when a reasoning model is configured
-  const usePipeline = Boolean(settings.ollamaReasoningModel);
+  // Use the 2-step pipeline (vision G�� reasoning/grading) when a reasoning model is configured
+  const usePipeline = Boolean(settings.ollamaReasoningModel) && !settings.useOllamaAioPrompt;
 
   const normalizeVisionStatus = (value?: string | null) => {
     const lower = (value || '').toLowerCase().trim();
@@ -599,23 +662,23 @@ The subsequent images are reference examples:`;
         onStructuredAnalysis(data);
       }
 
-      let readable = "### 👁️ Vision Analysis Findings\n\n";
+      let readable = "### =���n+� Vision Analysis Findings\n\n";
       
       if (data.detected_defects && Array.isArray(data.detected_defects) && data.detected_defects.length > 0) {
-        readable += "**⚠️ Defects Detected:**\n";
+        readable += "**G��n+� Defects Detected:**\n";
         data.detected_defects.forEach((d: any) => {
           readable += `- **${d.type}** (${d.severity}): ${d.location}\n`;
         });
         readable += "\n";
       } else {
-        readable += "**✅ No Obvious Defects Detected**\n\n";
+        readable += "**G�� No Obvious Defects Detected**\n\n";
       }
 
       if (data.student_observations && Array.isArray(data.student_observations)) {
-        readable += "**🔍 Observations:**\n";
+        readable += "**=��� Observations:**\n";
         data.student_observations.forEach((o: any) => {
           const tol = normalizeVisionStatus(o.matches_reference);
-          const statusIcon = tol === 'within_tolerance' ? '✅' : tol === 'out_of_tolerance' ? '❌' : tol === 'borderline' ? '⚠️' : 'ℹ️';
+          const statusIcon = tol === 'within_tolerance' ? 'G��' : tol === 'out_of_tolerance' ? 'G��' : tol === 'borderline' ? 'G��n+�' : 'G�n+�';
           const label = tol.replace(/_/g, ' ');
           readable += `- ${statusIcon} **${o.criterion}** (${label}): ${o.observed_condition}\n`;
         });
@@ -736,7 +799,7 @@ Based on the visual analysis above and the provided context, evaluate the weld a
       }
 
       // 2. Extract Table Rows for Criteria Scores
-      // Table format: | Criterion | Score (0–10) | Pass/Fail | Notes |
+      // Table format: | Criterion | Score (0G��10) | Pass/Fail | Notes |
       const lines = reasoningText.split('\n');
       let inTable = false;
       const reasoningScores: Record<string, { score: string, status: string, notes: string }> = {};
@@ -815,7 +878,9 @@ Based on the visual analysis above and the provided context, evaluate the weld a
   }
 
   // --- LEGACY / SINGLE MODEL LOGIC ---
-  const systemPrompt = resolveSystemPrompt(settings.systemPrompt);
+  const systemPrompt = settings.useOllamaAioPrompt
+    ? resolveOllamaAioPrompt(settings.systemPrompt)
+    : resolveSystemPrompt(settings.systemPrompt);
   let promptPrefix = payload.kind === 'video'
     ? `${systemPrompt}\n\nThe user supplied a short video clip that has been converted into ${images.length} chronological frames. Analyze trends across the frames as a single scene.`
     : systemPrompt;

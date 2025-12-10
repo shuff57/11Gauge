@@ -347,6 +347,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {isOllama && (
               <div className="space-y-4 pt-2 border-t border-zinc-800/50">
+                <label className="flex items-center justify-between text-sm text-zinc-300">
+                  <span>Use Ollama AIO Prompt (strict test)</span>
+                  <input
+                    type="checkbox"
+                    className="accent-blue-500"
+                    checked={!!settings.useOllamaAioPrompt}
+                    onChange={(e) => handleChange('useOllamaAioPrompt', e.target.checked)}
+                  />
+                </label>
+
                 <div className="space-y-2">
                   <label className="text-sm text-zinc-300 flex items-center gap-2">
                     <span>Reasoning Model</span>

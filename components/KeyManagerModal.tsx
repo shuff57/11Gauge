@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Key, RefreshCcw, Pencil, Trash2, Loader2, X, Wifi, CheckCircle, AlertTriangle, Users, FileText, RotateCcw, BookMarked, Plus } from 'lucide-react';
 import { AppSettings, ExampleImageSummary, ModelProvider, PrimarySourceSummary, SessionUser } from '../types';
-import { DEFAULT_REASONING_PROMPT, DEFAULT_VISION_PROMPT } from '../constants';
+import { DEFAULT_AIO_PROMPT, DEFAULT_REASONING_PROMPT, DEFAULT_VISION_PROMPT } from '../constants';
 import { testConnection } from '../services/llm';
 import { UserManagementPanel } from './UserManagementPanel';
 import { PrimarySourceModal } from './PrimarySourceModal';
@@ -86,10 +86,21 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     () => makePromptHumanReadable(settings.visionPrompt) ?? DEFAULT_VISION_PROMPT,
     [settings.visionPrompt]
   );
-  const displaySystemPrompt = useMemo(
-    () => makePromptHumanReadable(settings.systemPrompt) ?? DEFAULT_REASONING_PROMPT,
-    [settings.systemPrompt]
-  );
+  const displaySystemPrompt = useMemo(() => {
+    const normalized = makePromptHumanReadable(settings.systemPrompt);
+    if (settings.provider === ModelProvider.GEMINI) {
+      return normalized?.trim() || DEFAULT_AIO_PROMPT;
+    }
+    return normalized?.trim() || DEFAULT_REASONING_PROMPT;
+  }, [settings.systemPrompt, settings.provider]);
+
+  const systemPromptLabel = settings.provider === ModelProvider.GEMINI
+    ? 'Gemini All-in-One Prompt'
+    : 'Reasoning Prompt (Step 2)';
+
+  const systemPromptHelper = settings.provider === ModelProvider.GEMINI
+    ? 'Used by Gemini; combines observation + grading into one prompt.'
+    : 'Controls how the reasoning model interprets the vision data and grades the student.';
 
   const DEFAULT_STATUS = 'not_evaluated';
 
@@ -865,19 +876,19 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                     )}
                   </div>
 
-                  {/* Reasoning Prompt Section */}
+                  {/* System Prompt Section (provider-aware) */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-sm font-medium text-white">Reasoning Prompt (Step 2)</h3>
+                        <h3 className="text-sm font-medium text-white">{systemPromptLabel}</h3>
                         <p className="text-[10px] text-zinc-400">
-                          Controls how the reasoning model interprets the vision data and grades the student.
+                          {systemPromptHelper}
                         </p>
                       </div>
                       <button
                         onClick={() => onUpdate({ ...settings, systemPrompt: null })}
                         className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
-                        title="Reset to default reasoning prompt"
+                        title="Reset to default prompt"
                       >
                         <RotateCcw className="w-3 h-3" />
                         Reset Default
@@ -889,6 +900,11 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                       className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
                       spellCheck={false}
                     />
+                    <p className="text-[10px] text-zinc-500">
+                      {settings.provider === ModelProvider.GEMINI
+                        ? 'Gemini runs with the all-in-one prompt (default shown above).'
+                        : 'Ollama uses this reasoning prompt after the vision step.'}
+                    </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
