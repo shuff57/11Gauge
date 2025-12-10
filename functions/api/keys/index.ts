@@ -15,7 +15,7 @@ interface KeyRow {
   updated_at: string;
 }
 
-const AVAILABLE_PROVIDERS = new Set(["ollama"]);
+const AVAILABLE_PROVIDERS = new Set(["ollama", "gemini"]);
 
 const json = (body: any, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), {

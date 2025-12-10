@@ -4,7 +4,7 @@ import { AppSettings, ModelProvider, SessionUser } from '../types';
 import { MODEL_LABELS, GEMINI_MODELS, MATERIAL_TYPES, WELD_PROCESSES, MATERIAL_THICKNESSES, JOINT_TYPES, WELD_POSITIONS, ROD_TYPES } from '../constants';
 import { testConnection, getOllamaKey } from '../services/llm';
 
-type ProviderSlug = 'ollama';
+type ProviderSlug = 'ollama' | 'gemini';
 type Tab = 'general' | 'material';
 
 interface SavedKeySummary {
@@ -50,10 +50,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
     const parsed: SavedKeySummary[] = Array.isArray(payload?.keys)
       ? payload.keys
-          .filter((key: any) => key.provider === 'ollama')
+          .filter((key: any) => key.provider === 'ollama' || key.provider === 'gemini')
           .map((key: any) => ({
             id: key.id,
-            provider: 'ollama' as ProviderSlug,
+            provider: (key.provider as ProviderSlug) || 'ollama',
             label: key.label,
             updatedAt: key.updatedAt || key.updated_at || '',
             lastFour: key.lastFour ?? key.last_four ?? null,
@@ -92,18 +92,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const fetchSavedKeyValue = React.useCallback(async (keyId: number | null): Promise<string | null> => {
+    if (!keyId) return null;
+    try {
+      const response = await fetch(`/api/keys/${keyId}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return (data as any)?.key?.value || null;
+    } catch (err) {
+      console.warn('Unable to load saved key', err);
+      return null;
+    }
+  }, []);
+
 
   const handleTestConnection = async () => {
     setTestStatus('loading');
     setTestMessage('');
     try {
-      await testConnection(settings);
-      let keyStored = false;
+      let settingsToTest = { ...settings };
+
+      if (settings.provider === ModelProvider.GEMINI && !settings.geminiKey && settings.geminiKeyId) {
+        const value = await fetchSavedKeyValue(settings.geminiKeyId);
+        if (value) {
+          settingsToTest = { ...settingsToTest, geminiKey: value };
+          onUpdate(settingsToTest);
+        }
+      }
+
+      if (settings.provider === ModelProvider.OLLAMA && !settings.ollamaKey && settings.ollamaKeyId) {
+        const value = await fetchSavedKeyValue(settings.ollamaKeyId);
+        if (value) {
+          settingsToTest = { ...settingsToTest, ollamaKey: value };
+          onUpdate(settingsToTest);
+        }
+      }
+
+      await testConnection(settingsToTest);
       if (settings.provider === ModelProvider.OLLAMA) {
         // Only save to session storage for persistence across reloads if not logged in
         // Logged in users should use Key Manager to save keys
         if (!user?.email) {
-          sessionStorage.setItem('session_ollama_key', settings.ollamaKey || '');
+          sessionStorage.setItem('session_ollama_key', settingsToTest.ollamaKey || '');
         }
       }
       setTestStatus('success');
@@ -169,36 +199,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isOllama = settings.provider === ModelProvider.OLLAMA;
   const isCorsError = isOllama && testStatus === 'error' && (testMessage.includes('CORS') || testMessage.includes('Failed to fetch'));
-  const savedOllamaKeys = useMemo(() => savedKeys, [savedKeys]);
+  const savedOllamaKeys = useMemo(() => savedKeys.filter((k) => k.provider === 'ollama'), [savedKeys]);
+  const savedGeminiKeys = useMemo(() => savedKeys.filter((k) => k.provider === 'gemini'), [savedKeys]);
   const isGeminiLiveSelection = !isOllama && Boolean(settings.geminiModel && settings.geminiModel.includes('live'));
 
-  const handleSavedKeySelect = async (keyIdStr: string) => {
+  const handleSavedKeySelect = async (provider: ProviderSlug, keyIdStr: string) => {
     const keyId = keyIdStr ? Number(keyIdStr) : null;
 
-    onUpdate({ ...settings, ollamaKeyId: keyId });
-
-    if (!keyId) {
-      handleChange('ollamaKey', '');
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/keys/${keyId}`);
-      if (!response.ok) {
-        throw new Error('Failed to load saved key');
+    if (provider === 'ollama') {
+      onUpdate({ ...settings, ollamaKeyId: keyId });
+      if (!keyId) {
+        handleChange('ollamaKey', '');
+        return;
       }
-      const data = await response.json();
-      const value = (data as any)?.key?.value;
-      if (!value) return;
-
-      onUpdate({
-        ...settings,
-        ollamaKeyId: keyId,
-        ollamaKey: value
-      });
-    } catch (err) {
-      console.warn('Unable to load saved key', err);
+    } else {
+      onUpdate({ ...settings, geminiKeyId: keyId });
+      if (!keyId) {
+        handleChange('geminiKey', '');
+        return;
+      }
     }
+
+    const value = await fetchSavedKeyValue(keyId);
+    if (!value) return;
+
+    onUpdate({
+      ...settings,
+      ...(provider === 'ollama'
+        ? { ollamaKeyId: keyId, ollamaKey: value }
+        : { geminiKeyId: keyId, geminiKey: value })
+    });
   };
 
   if (!isOpen) return null;
@@ -283,25 +313,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            {isOllama && user && (
-              <div className="space-y-1">
-                <label className="text-xs text-zinc-400">Use Saved Key</label>
-                <select
-                  value={settings.ollamaKeyId || ''}
-                  onChange={(e) => handleSavedKeySelect(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                >
-                  <option value="">Select a saved key</option>
-                  {savedOllamaKeys.map((key) => (
-                    <option key={key.id} value={String(key.id)}>
-                      {key.label}
-                    </option>
-                  ))}
-                </select>
-                {savedOllamaKeys.length === 0 && (
-                  <p className="text-[10px] text-zinc-500 pt-1"></p>
-                )}
-              </div>
+            {isOllama && (
+              user ? (
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400">Use Saved Key</label>
+                  <select
+                    value={settings.ollamaKeyId || ''}
+                    onChange={(e) => handleSavedKeySelect('ollama', e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                  >
+                    <option value="">Select a saved key</option>
+                    {savedOllamaKeys.map((key) => (
+                      <option key={key.id} value={String(key.id)}>
+                        {key.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                    <span>Manage keys in Key Manager.</span>
+                    <button
+                      type="button"
+                      onClick={onOpenKeyManager}
+                      className="text-blue-400 hover:text-blue-300 text-[10px]"
+                    >
+                      Open
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[10px] text-zinc-500">Sign in to use a saved Ollama key.</p>
+              )
             )}
 
             {isOllama && (
@@ -328,17 +369,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {!isOllama && (
               <div className="space-y-4 pt-2 border-t border-zinc-800/50">
-                <div className="space-y-2">
-                  <label className="text-sm text-zinc-300">Gemini API Key</label>
-                  <input
-                    type="password"
-                    value={settings.geminiKey || ''}
-                    onChange={(e) => handleChange('geminiKey', e.target.value)}
-                    placeholder="Paste your Gemini API key"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
-                  />
-                  <p className="text-[10px] text-zinc-500">Keys are kept local unless you save them in Key Manager.</p>
-                </div>
+                {user ? (
+                  <div className="space-y-2">
+                    <label className="text-sm text-zinc-300">Use Saved Key</label>
+                    <select
+                      value={settings.geminiKeyId || ''}
+                      onChange={(e) => handleSavedKeySelect('gemini', e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                    >
+                      <option value="">Select a saved key</option>
+                      {savedGeminiKeys.map((key) => (
+                        <option key={key.id} value={String(key.id)}>
+                          {key.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                      <span>Manage keys in Key Manager.</span>
+                      <button
+                        type="button"
+                        onClick={onOpenKeyManager}
+                        className="text-blue-400 hover:text-blue-300 text-[10px]"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-zinc-500">Sign in to use a saved Gemini key.</p>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm text-zinc-300">Gemini Model</label>
@@ -354,6 +413,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {isGeminiLiveSelection && (
                     <p className="text-[10px] text-amber-300">Live API models are experimental and use a WebSocket session; expect different latency/behavior.</p>
                   )}
+                </div>
+
+                <div className="pt-2">
+                  <a
+                    href="https://aistudio.google.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                  >
+                    View usage and get API keys (Google AI Studio)
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
             )}
@@ -405,14 +476,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {isOllama && user ? (
-              <>
-              </>
-            ) : (
-              <div className="border border-dashed border-zinc-800 rounded-xl p-3 text-xs text-zinc-500 bg-zinc-950/30">
-                Sign in to securely store and reuse provider keys across devices.
-              </div>
-            )}
+
+            {isOllama && user ? null : null}
 
             {/* CORS Helper Section */}
             {isCorsError && (
@@ -570,7 +635,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {user && (
               <button
                 onClick={handleTestConnection}
-                disabled={testStatus === 'loading' || (isOllama && !settings.ollamaUrl)}
+                disabled={testStatus === 'loading'}
                 className="flex-1 px-4 py-2 bg-[#a1a1aa] text-black text-sm font-medium rounded-lg hover:bg-zinc-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Wifi className="w-4 h-4" />

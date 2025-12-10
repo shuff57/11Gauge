@@ -8,7 +8,7 @@ import { PrimarySourceModal } from './PrimarySourceModal';
 import { makePromptHumanReadable } from '../utils/prompt';
 import { RubricObservation, RubricDefect } from '../types';
 
-type ProviderSlug = 'ollama';
+type ProviderSlug = 'ollama' | 'gemini';
 type Tab = 'keys' | 'users' | 'prompts' | 'library';
 
 interface SavedKeySummary {
@@ -81,6 +81,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
   const [testMessage, setTestMessage] = useState<string>('');
   const [isSavingPrompts, setIsSavingPrompts] = useState(false);
   const [promptsMessage, setPromptsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderSlug>('ollama');
   const displayVisionPrompt = useMemo(
     () => makePromptHumanReadable(settings.visionPrompt) ?? DEFAULT_VISION_PROMPT,
     [settings.visionPrompt]
@@ -254,14 +255,15 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     }
     const parsed: SavedKeySummary[] = Array.isArray(payload?.keys)
       ? payload.keys
-          .filter((key: any) => key.provider === 'ollama')
+          .filter((key: any) => key.provider === 'ollama' || key.provider === 'gemini')
           .map((key: any) => ({
             id: key.id,
-            provider: 'ollama' as ProviderSlug,
+            provider: (key.provider as ProviderSlug) || 'ollama',
             label: key.label,
             updatedAt: key.updatedAt || key.updated_at || '',
             lastFour: key.lastFour ?? key.last_four ?? null,
           }))
+          .sort((a: SavedKeySummary, b: SavedKeySummary) => a.label.localeCompare(b.label))
       : [];
     return parsed;
   }, [user]);
@@ -287,8 +289,10 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     }
   }, [isOpen, refreshSavedKeys]);
 
-  const savedOllamaKeys = useMemo(() => savedKeys, [savedKeys]);
-  const ACTIVE_PROVIDER_SLUG: ProviderSlug = 'ollama';
+  const savedKeysByProvider = useMemo(
+    () => savedKeys.filter((k) => k.provider === selectedProvider),
+    [savedKeys, selectedProvider]
+  );
 
   const resetKeyForm = () => {
     setKeyForm({ id: null, label: '' });
@@ -305,8 +309,9 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
     // Create temp settings with the key currently in the input
     const tempSettings: AppSettings = {
       ...settings,
-      provider: ModelProvider.OLLAMA,
-      ollamaKey: inputValue
+      provider: selectedProvider === 'ollama' ? ModelProvider.OLLAMA : ModelProvider.GEMINI,
+      ollamaKey: selectedProvider === 'ollama' ? inputValue : settings.ollamaKey,
+      geminiKey: selectedProvider === 'gemini' ? inputValue : settings.geminiKey,
     };
 
     try {
@@ -350,7 +355,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
         const response = await fetch('/api/keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: ACTIVE_PROVIDER_SLUG, label, key: currentSecret })
+          body: JSON.stringify({ provider: selectedProvider, label, key: currentSecret })
         });
         const data = await response.json().catch(() => null);
         if (!response.ok) {
@@ -379,6 +384,7 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
         id: key.id,
         label: key.label
       });
+      setSelectedProvider(key.provider);
       if (data?.key?.value) {
         setInputValue(data.key.value);
       }
@@ -918,6 +924,32 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                   )}
 
                   <div className="space-y-1">
+                    <label className="text-xs text-zinc-300">Provider</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProvider('ollama')}
+                        className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${selectedProvider === 'ollama' ? 'border-white text-white bg-zinc-800' : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'}`}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          <span>Ollama</span>
+                          {selectedProvider === 'ollama' && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProvider('gemini')}
+                        className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${selectedProvider === 'gemini' ? 'border-white text-white bg-zinc-800' : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'}`}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          <span>Gemini</span>
+                          {selectedProvider === 'gemini' && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
                     <label className="text-xs text-zinc-300">Label</label>
                     <input
                       type="text"
@@ -1007,18 +1039,18 @@ export const KeyManagerModal: React.FC<KeyManagerModalProps> = ({
                     </div>
 
                     <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                      {loadingSavedKeys && savedOllamaKeys.length === 0 ? (
+                      {loadingSavedKeys && savedKeysByProvider.length === 0 ? (
                         <div className="text-[10px] text-zinc-400">Loading saved keys...</div>
-                      ) : savedOllamaKeys.length === 0 ? (
+                      ) : savedKeysByProvider.length === 0 ? (
                         <div className="text-[10px] text-zinc-500">No saved keys yet.</div>
                       ) : (
-                        savedOllamaKeys.map((key) => (
+                        savedKeysByProvider.map((key) => (
                           <div
                             key={key.id}
                             className="flex items-center justify-between gap-3 border border-zinc-800 rounded-lg px-3 py-1.5"
                           >
-                            <div>
-                              <p className="text-xs text-white font-medium">{key.label}</p>
+                            <div className="min-w-0">
+                              <p className="text-xs text-white font-medium truncate">{key.label}</p>
                               <p className="text-[10px] text-zinc-500">•••• {key.lastFour || '????'}</p>
                             </div>
                             <div className="flex items-center gap-2">
