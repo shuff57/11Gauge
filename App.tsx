@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 import { ImageCropper } from './components/ImageCropper';
 import { makePromptHumanReadable } from './utils/prompt';
+import { useAuth } from './hooks/useAuth';
+import { useSettings } from './hooks/useSettings';
+import { useObjectUrls } from './hooks/useObjectUrls';
 // Debug panel utility
 const useDebugPanel = () => {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -65,51 +68,17 @@ const SaveReferenceModal = React.lazy(() => import('./components/SaveReferenceMo
 
 export default function App() {
   const { debugLogs, addDebugLog } = useDebugPanel();
-  // State
-  const hydrateSettings = (raw: AppSettings | null): AppSettings => {
-    const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
-    if (raw?.ollamaModel === 'llama3.2-vision') {
-      merged.ollamaModel = DEFAULT_SETTINGS.ollamaModel;
-    }
-    if (!merged.ollamaUrl) {
-      merged.ollamaUrl = DEFAULT_SETTINGS.ollamaUrl;
-    }
-    if (!merged.ollamaModel) {
-      merged.ollamaModel = DEFAULT_SETTINGS.ollamaModel;
-    }
-    // Ensure reasoning model is set if it was previously empty (migration)
-    if (!merged.ollamaReasoningModel) {
-      merged.ollamaReasoningModel = DEFAULT_SETTINGS.ollamaReasoningModel;
-    }
-    const formattedSystemPrompt = makePromptHumanReadable(merged.systemPrompt);
-    merged.systemPrompt = formattedSystemPrompt?.trim() ? formattedSystemPrompt : DEFAULT_REASONING_PROMPT;
-    merged.visionPrompt = makePromptHumanReadable(merged.visionPrompt);
-    return merged;
-  };
 
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('vision-settings');
-    return hydrateSettings(saved ? JSON.parse(saved) : null);
-  });
-  
+  // Use custom hooks for better separation of concerns
+  const { settings, setSettings } = useSettings();
+  const { user, isAuthOpen, setIsAuthOpen, setUser } = useAuth();
+  const { urls: previewUrls, createUrls, revokeAll } = useObjectUrls();
+
+  // State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
   const [keyUpdateTrigger, setKeyUpdateTrigger] = useState(0);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [user, setUser] = useState<SessionUser | null>(() => {
-    const saved = localStorage.getItem('user');
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed.email === 'string') {
-        return parsed;
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  });
   const isAdminUser = Boolean(user?.isAdmin);
   const [primarySources, setPrimarySources] = useState<PrimarySourceSummary[]>([]);
   const [primarySourcesLoading, setPrimarySourcesLoading] = useState(false);
@@ -128,7 +97,6 @@ export default function App() {
     }
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const primaryFile = selectedFiles[activeIndex] || null;
@@ -279,7 +247,7 @@ export default function App() {
     setExampleImages((prev) => prev.filter((entry) => entry.id !== id));
   }, []);
 
-  // Persistence
+  // Migration: Auto-update stale system prompts
   useEffect(() => {
     // Check if the current settings have the OLD prompt and update it to the NEW default if so
     const oldDefaultStart = "You are a strict Certified Welding Inspector (CWI) and expert instructor.\n\nYour role is to evaluate welding practice results to help students improve.";
@@ -287,7 +255,7 @@ export default function App() {
        console.log("Auto-updating stale system prompt to new default.");
        setSettings(prev => ({ ...prev, systemPrompt: DEFAULT_SETTINGS.systemPrompt }));
     }
-    localStorage.setItem('vision-settings', JSON.stringify(settings));
+    // Note: Settings persistence is now handled by useSettings hook with debouncing
   }, [settings]);
 
   useEffect(() => {
@@ -383,14 +351,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('user');
-    }
-  }, [user]);
-
-  useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!(e.target instanceof Node)) return;
       
@@ -413,71 +373,6 @@ export default function App() {
     return () => {
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onEsc);
-    };
-  }, []);
-
-  // Handle OAuth callback
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const authSuccess = params.get('auth_success');
-    const email = params.get('email');
-    const authError = params.get('auth_error');
-
-    if (authSuccess === 'true' && email) {
-      setUser({ email: decodeURIComponent(email) });
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (authError) {
-      console.error('Auth error:', authError);
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Always verify session on mount to ensure cookie is valid
-    let active = true;
-    const fetchSessionUser = async () => {
-      try {
-        const response = await fetch('/api/auth/me');
-        if (!active) return;
-        
-        if (response.status === 401) {
-          // Session is invalid, clear user state
-          if (user) setUser(null);
-          return;
-        }
-        
-        if (!response.ok) return;
-        const data = await response.json().catch(() => null) as any;
-        if (!active) return;
-        
-        if (data?.user?.email) {
-          // Update user state if needed
-          setUser(prev => {
-            if (!prev) return {
-              email: data.user.email,
-              isAdmin: Boolean(data.user.isAdmin),
-              id: data.user.id
-            };
-            // Avoid redundant updates
-            if (prev.email !== data.user.email || prev.isAdmin !== Boolean(data.user.isAdmin)) {
-              return {
-                email: data.user.email,
-                isAdmin: Boolean(data.user.isAdmin),
-                id: data.user.id
-              };
-            }
-            return prev;
-          });
-        }
-      } catch (err) {
-        console.warn('Session fetch failed', err);
-      }
-    };
-    fetchSessionUser();
-    return () => {
-      active = false;
     };
   }, []);
 
@@ -540,12 +435,8 @@ export default function App() {
     }
 
     setSelectedFiles(list);
-    // Build preview URLs for each selected file
-    const urls = list.map((file) => URL.createObjectURL(file));
-    setPreviewUrls((prev) => {
-      prev.forEach((url) => URL.revokeObjectURL(url));
-      return urls;
-    });
+    // Build preview URLs for each selected file with automatic cleanup
+    createUrls(list);
     setActiveIndex(0);
     setMediaKind(primaryKind);
     setResult(null);
@@ -576,10 +467,7 @@ export default function App() {
   const handleReset = () => {
     setSelectedFiles([]);
     setMediaKind(null);
-    setPreviewUrls((prev) => {
-      prev.forEach((url) => URL.revokeObjectURL(url));
-      return [];
-    });
+    revokeAll();
     setActiveIndex(0);
     setResult(null);
     setReasoningTrace(null);

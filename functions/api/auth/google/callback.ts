@@ -1,10 +1,52 @@
 import { createSession, buildSessionCookie } from '../../../utils/session';
+
 interface Env {
   USERS_DB: D1Database;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
+  ALLOWED_ORIGINS?: string; // Comma-separated list of allowed origins
 }
+
+/**
+ * Validates that a redirect URL is safe to use
+ * Prevents open redirect vulnerabilities
+ */
+const validateRedirectOrigin = (returnTo: string | null, requestOrigin: string): string => {
+  if (!returnTo) {
+    return requestOrigin;
+  }
+
+  try {
+    const returnUrl = new URL(returnTo);
+    const requestUrl = new URL(requestOrigin);
+
+    // Allow same origin
+    if (returnUrl.origin === requestUrl.origin) {
+      return returnTo;
+    }
+
+    // Check against allowlist (supports production, preview, and local dev)
+    const allowedOrigins = [
+      'https://11gauge.pages.dev',
+      'http://localhost:3000',
+      'http://localhost:8788',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:8788',
+    ];
+
+    if (allowedOrigins.includes(returnUrl.origin)) {
+      return returnTo;
+    }
+
+    console.warn('[OAuth] Rejected untrusted redirect origin:', returnUrl.origin);
+    return requestOrigin;
+  } catch (e) {
+    // Invalid URL, fall back to request origin
+    console.warn('[OAuth] Invalid redirect URL:', returnTo);
+    return requestOrigin;
+  }
+};
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -121,11 +163,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
     
     console.log('[Google OAuth Callback] User authenticated, redirecting');
-    
+
     const token = userId ? await createSession(env, userId) : null;
 
-    const base = returnToOrigin || new URL(request.url).origin;
-    const redirectUrl = new URL(base);
+    // Validate redirect origin to prevent open redirect attacks
+    const requestOrigin = new URL(request.url).origin;
+    const validatedOrigin = validateRedirectOrigin(returnToOrigin, requestOrigin);
+    const redirectUrl = new URL(validatedOrigin);
     redirectUrl.pathname = '/';
     redirectUrl.search = `?auth_success=true&email=${encodeURIComponent(userInfo.email)}`;
 
@@ -136,8 +180,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return new Response(null, { status: 302, headers });
   } catch (err: any) {
     console.error('[Google OAuth Callback] Error:', err);
-    const base = returnToOrigin || new URL(request.url).origin;
-    const redirectUrl = new URL(base);
+    // Validate redirect origin even in error cases
+    const requestOrigin = new URL(request.url).origin;
+    const validatedOrigin = validateRedirectOrigin(returnToOrigin, requestOrigin);
+    const redirectUrl = new URL(validatedOrigin);
     redirectUrl.pathname = '/';
     redirectUrl.search = `?auth_error=${encodeURIComponent(err.message)}`;
     return Response.redirect(redirectUrl.toString(), 302);

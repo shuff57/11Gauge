@@ -7,6 +7,9 @@ import {
   generateEmbedding,
   type KeyStore
 } from "../../utils/ollama";
+import { checkRateLimit, getClientIdentifier, cleanupExpiredRateLimits } from "../../utils/rateLimit";
+import { getSessionUser } from "../../utils/session";
+import { buildRagPrompt, validateTextSafety } from "../../utils/promptSanitizer";
 
 interface Env {
   OLLAMA_URL?: string;
@@ -37,6 +40,37 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
+
+  // Rate limiting: 50 requests per 15 minutes per user/IP
+  const user = await getSessionUser(env, request);
+  const clientId = getClientIdentifier(request, user?.id);
+  const rateLimitResult = await checkRateLimit(env, clientId, {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    maxRequests: 50,
+    keyPrefix: 'llm_generate'
+  });
+
+  if (!rateLimitResult.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Rate limit exceeded. Please try again later.",
+        retryAfter: rateLimitResult.resetAt.toISOString()
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Limit": "50",
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": rateLimitResult.resetAt.toISOString(),
+          "Retry-After": String(Math.ceil((rateLimitResult.resetAt.getTime() - Date.now()) / 1000))
+        }
+      }
+    );
+  }
+
+  // Cleanup old rate limit records (async, don't wait)
+  cleanupExpiredRateLimits(env).catch(err => console.error('[RateLimit] Cleanup error:', err));
 
   let payload: any;
   try {
@@ -130,10 +164,25 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
             const topK = scored.slice(0, 5);
 
             if (topK.length > 0) {
-              ragChunkCount = topK.length;
-              console.log(`[RAG] Found ${topK.length} relevant chunks. Injecting context.`);
-              const contextBlock = topK.map(k => k.text).join("\n\n---\n\n");
-              prompt = `CONTEXT FROM KNOWLEDGE BASE:\n${contextBlock}\n\nUSER REQUEST:\n${prompt}`;
+              // Validate chunks for potential injection attempts
+              const safeChunks = topK.filter(k => {
+                const validation = validateTextSafety(k.text);
+                if (!validation.safe) {
+                  console.warn('[RAG] Suspicious chunk detected and filtered:', validation.reason);
+                }
+                return validation.safe;
+              });
+
+              if (safeChunks.length > 0) {
+                ragChunkCount = safeChunks.length;
+                console.log(`[RAG] Found ${safeChunks.length} relevant chunks. Injecting context.`);
+
+                // Use sanitized RAG prompt builder to prevent injection
+                const contextTexts = safeChunks.map(k => k.text);
+                prompt = buildRagPrompt(prompt, contextTexts);
+              } else {
+                console.log("[RAG] No safe chunks found after validation.");
+              }
             } else {
               console.log("[RAG] No relevant chunks found above threshold.");
             }
@@ -157,7 +206,18 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
       think
     });
 
-    return relayResponse(upstream, ragChunkCount > 0 ? { 'X-RAG-Count': String(ragChunkCount) } : undefined);
+    // Add rate limit headers to response
+    const additionalHeaders: Record<string, string> = {
+      'X-RateLimit-Limit': '50',
+      'X-RateLimit-Remaining': String(rateLimitResult.remainingRequests),
+      'X-RateLimit-Reset': rateLimitResult.resetAt.toISOString()
+    };
+
+    if (ragChunkCount > 0) {
+      additionalHeaders['X-RAG-Count'] = String(ragChunkCount);
+    }
+
+    return relayResponse(upstream, additionalHeaders);
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || "Request failed." }), {
       status: 400,
